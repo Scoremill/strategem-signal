@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import {
-  checkAdminPassword,
-  createSessionToken,
-  setSessionCookie,
-} from "@/lib/auth";
+import { checkAdminPassword, createSessionToken } from "@/lib/auth";
+
+const COOKIE_NAME = "ss_session";
+const SESSION_DURATION = 60 * 60 * 24 * 7; // 7 days
 
 export async function POST(request: Request) {
   try {
@@ -23,8 +22,16 @@ export async function POST(request: Request) {
         email,
         role: "superadmin",
       });
-      await setSessionCookie(token);
-      return NextResponse.json({ ok: true, role: "superadmin" });
+
+      const response = NextResponse.json({ ok: true, role: "superadmin" });
+      response.cookies.set(COOKIE_NAME, token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: SESSION_DURATION,
+      });
+      return response;
     }
 
     // TODO: check DB users for regular login

@@ -22,11 +22,12 @@ export default function SignInPage() {
         body: JSON.stringify({ email, password }),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
         router.push("/dashboard");
         router.refresh();
       } else {
-        const data = await res.json();
         setError(data.error || "Invalid credentials");
       }
     } catch {
@@ -37,7 +38,7 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0F172A] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-[#F97316] rounded-xl mb-4">
@@ -45,57 +46,59 @@ export default function SignInPage() {
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white">StrategemSignal</h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <h1 className="text-2xl font-bold text-[#1E293B]">StrategemSignal</h1>
+          <p className="text-sm text-[#6B7280] mt-1">
             Demand-Capacity Market Intelligence
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-sm text-red-400">
-              {error}
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-[#1E293B] mb-1.5">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-[#1E293B] placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#F97316] focus:border-transparent text-sm"
+                placeholder="you@company.com"
+              />
             </div>
-          )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-3 py-2.5 bg-[#1E293B] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#F97316] focus:border-transparent"
-              placeholder="you@company.com"
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-[#1E293B] mb-1.5">
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-[#1E293B] placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#F97316] focus:border-transparent text-sm"
+                placeholder="Enter password"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-3 py-2.5 bg-[#1E293B] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#F97316] focus:border-transparent"
-              placeholder="Enter password"
-            />
-          </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-medium rounded-lg text-sm transition-colors disabled:opacity-50"
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
+          </form>
+        </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-semibold rounded-lg transition-colors disabled:opacity-50"
-          >
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
-
-        <p className="mt-8 text-center text-xs text-gray-600">
+        <p className="mt-6 text-center text-xs text-[#6B7280]">
           Strategem LLC &copy; {new Date().getFullYear()}
         </p>
       </div>
