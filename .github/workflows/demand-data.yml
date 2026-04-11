@@ -1,0 +1,27 @@
+name: Monthly Demand Data Fetch
+
+on:
+  schedule:
+    # 6th of each month at 6:00 AM CT (11:00 UTC)
+    # Census permits publish ~5th business day; this gives a 1-day buffer
+    - cron: '0 11 6 * *'
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  fetch-demand-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch demand data (permits, employment, population)
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.APP_URL }}/api/cron/demand" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Demand fetch response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Demand fetch failed with HTTP $HTTP_CODE"
+            exit 1
+          fi

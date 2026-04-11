@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
 const COOKIE_NAME = "ss_session";
-const PUBLIC_PATHS = ["/sign-in", "/api/auth/login", "/api/auth/logout"];
+const PUBLIC_PATHS = ["/sign-in", "/api/auth/login", "/api/auth/logout", "/api/cron/"];
 
 function getSecret() {
   const secret = process.env.ADMIN_SESSION_SECRET || "dev-secret";
