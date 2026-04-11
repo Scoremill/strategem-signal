@@ -193,24 +193,24 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
       </div>
 
       {/* Legend */}
-      <div className="absolute bottom-6 left-4 z-10 bg-white rounded-lg shadow-lg border border-gray-200 px-4 py-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-2">
+      <div className="absolute bottom-6 left-4 z-10 bg-white rounded-lg shadow-lg border border-gray-200 px-5 py-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#1E293B] mb-3">
           {getLabel(metric)}
         </p>
         {metric === "ratio" ? (
-          <div className="flex items-center gap-2 text-[11px]">
-            <span className="w-3 h-3 rounded-full bg-[#16A34A]" /> &lt;0.6
-            <span className="w-3 h-3 rounded-full bg-[#22C55E] ml-1" /> 0.6–0.85
-            <span className="w-3 h-3 rounded-full bg-[#EAB308] ml-1" /> 0.85–1.15
-            <span className="w-3 h-3 rounded-full bg-[#EF4444] ml-1" /> 1.15–1.5
-            <span className="w-3 h-3 rounded-full bg-[#DC2626] ml-1" /> &gt;1.5
+          <div className="flex items-center gap-4 text-sm text-[#1E293B]">
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#16A34A]" /> &lt;0.6</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#22C55E]" /> 0.6–0.85</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#D97706]" /> 0.85–1.15</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#EF4444]" /> 1.15–1.5</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#DC2626]" /> &gt;1.5</span>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-[11px]">
-            <span className="w-3 h-3 rounded-full bg-[#16A34A]" /> Low
-            <span className="w-3 h-3 rounded-full bg-[#22C55E] ml-1" /> Moderate
-            <span className="w-3 h-3 rounded-full bg-[#EAB308] ml-1" /> High
-            <span className="w-3 h-3 rounded-full bg-[#DC2626] ml-1" /> Very High
+          <div className="flex items-center gap-4 text-sm text-[#1E293B]">
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#16A34A]" /> Low</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#22C55E]" /> Moderate</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#D97706]" /> High</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#DC2626]" /> Very High</span>
           </div>
         )}
       </div>

@@ -200,6 +200,11 @@ export default async function GeographyDetailPage({
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-200">
             <h2 className="text-sm font-semibold text-[#1E293B]">Trade Capacity by Sector (Latest Quarter)</h2>
+            {trades.length < 4 && (
+              <p className="text-[10px] text-[#6B7280] mt-1">
+                Some NAICS sectors may be suppressed by BLS to protect employer confidentiality in markets with few firms.
+              </p>
+            )}
           </div>
           <table className="w-full text-sm">
             <thead>

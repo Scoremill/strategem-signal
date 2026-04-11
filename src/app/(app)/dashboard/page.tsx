@@ -53,6 +53,20 @@ export default async function DashboardPage() {
       )`
     );
 
+  // Get most recent unemployment rate per MSA (may differ from latest employment date)
+  const latestUR = await db
+    .select({
+      geographyId: employmentData.geographyId,
+      unemploymentRate: employmentData.unemploymentRate,
+    })
+    .from(employmentData)
+    .where(
+      sql`${employmentData.unemploymentRate} IS NOT NULL AND (${employmentData.geographyId}, ${employmentData.periodDate}) IN (
+        SELECT geography_id, MAX(period_date) FROM employment_data WHERE unemployment_rate IS NOT NULL GROUP BY geography_id
+      )`
+    );
+  const urMap = new Map(latestUR.map((u) => [u.geographyId, u.unemploymentRate]));
+
   // Get last pipeline run
   const [lastRun] = await db.select().from(fetchLogs).orderBy(desc(fetchLogs.runAt)).limit(1);
 
@@ -85,7 +99,7 @@ export default async function DashboardPage() {
       permits: permit?.totalPermits ?? null,
       singleFamily: permit?.singleFamily ?? null,
       employment: emp?.totalNonfarm ?? null,
-      unemploymentRate: emp?.unemploymentRate ? parseFloat(String(emp.unemploymentRate)) : null,
+      unemploymentRate: urMap.get(m.id) ? parseFloat(String(urMap.get(m.id))) : (emp?.unemploymentRate ? parseFloat(String(emp.unemploymentRate)) : null),
     };
   });
 

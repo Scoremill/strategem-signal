@@ -5,7 +5,7 @@
 import { db } from "@/lib/db";
 import { geographies, permitData, employmentData, migrationData } from "@/lib/db/schema";
 import { fetchSeries, MSA_SERIES } from "./fred-client";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 interface PipelineResult {
@@ -100,6 +100,8 @@ async function fetchEmployment(
       const nonfarm = Math.round(parseFloat(obs.value) * 1000); // FRED reports in thousands
       const ur = urMap.get(obs.date) ?? null;
 
+      // Use raw SQL upsert to update unemployment rate on existing records
+      const urStr = ur !== null ? String(ur) : null;
       await db
         .insert(employmentData)
         .values({
@@ -107,10 +109,23 @@ async function fetchEmployment(
           geographyId: geoId,
           periodDate: obs.date,
           totalNonfarm: nonfarm,
-          unemploymentRate: ur !== null ? String(ur) : null,
+          unemploymentRate: urStr,
           source: "fred",
         })
         .onConflictDoNothing();
+
+      // Update unemployment rate on existing records if we have it
+      if (urStr) {
+        await db
+          .update(employmentData)
+          .set({ unemploymentRate: urStr })
+          .where(
+            and(
+              eq(employmentData.geographyId, geoId),
+              eq(employmentData.periodDate, obs.date)
+            )
+          );
+      }
       inserted++;
     }
   } catch (err) {

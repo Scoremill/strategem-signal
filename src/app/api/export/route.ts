@@ -101,7 +101,7 @@ export async function GET() {
       m.shortName,
       m.state,
       m.cbsaFips,
-      m.population ?? "",
+      m.population ? `${(m.population / 1_000_000).toFixed(1)}M` : "",
       s ? parseFloat(String(s.demandIndex)).toFixed(0) : "",
       s ? parseFloat(String(s.capacityIndex)).toFixed(0) : "",
       s ? parseFloat(String(s.demandCapacityRatio)).toFixed(2) : "",

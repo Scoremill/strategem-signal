@@ -29,19 +29,27 @@ export default function AdminClient({
   dataCounts: { permits: number; employment: number; population: number; capacity: number; scores: number };
 }) {
   const [running, setRunning] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<{ pipeline: string; ok: boolean; message: string } | null>(null);
   const [alerts, setAlerts] = useState<Alert[] | null>(null);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
 
   async function runPipeline(pipeline: string, backfill = false) {
     setRunning(pipeline);
+    setLastResult(null);
     try {
       const url = `/api/cron/${pipeline}${backfill ? "?backfill=true" : ""}`;
       const res = await fetch(url, { method: "POST" });
       const data = await res.json();
-      alert(`${pipeline}: ${JSON.stringify(data, null, 2)}`);
-      window.location.reload();
+      if (data.ok) {
+        const records = data.permits || data.recordsInserted || data.marketsScored || data.recordsFetched || 0;
+        const duration = data.durationMs ? ` in ${(data.durationMs / 1000).toFixed(1)}s` : "";
+        setLastResult({ pipeline, ok: true, message: `${pipeline} completed — ${records} records${duration}` });
+      } else {
+        setLastResult({ pipeline, ok: false, message: data.error || "Unknown error" });
+      }
+      setTimeout(() => window.location.reload(), 2000);
     } catch (err) {
-      alert(`Error running ${pipeline}: ${err}`);
+      setLastResult({ pipeline, ok: false, message: `Failed: ${err}` });
     } finally {
       setRunning(null);
     }
@@ -79,6 +87,15 @@ export default function AdminClient({
           ))}
         </div>
       </div>
+
+      {/* Pipeline Result Banner */}
+      {lastResult && (
+        <div className={`rounded-lg px-4 py-3 text-sm font-medium ${
+          lastResult.ok ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"
+        }`}>
+          {lastResult.ok ? "✓" : "✗"} {lastResult.message}
+        </div>
+      )}
 
       {/* Manual Triggers */}
       <div>
