@@ -1,0 +1,202 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
+
+interface MarketPoint {
+  id: string;
+  shortName: string;
+  state: string;
+  lat: number;
+  lng: number;
+  demandIndex: number | null;
+  capacityIndex: number | null;
+  ratio: number | null;
+  status: string | null;
+  permits: number | null;
+  tradeWorkers: number | null;
+}
+
+type MetricView = "ratio" | "demand" | "capacity";
+
+function getColor(value: number | null, metric: MetricView): string {
+  if (value === null) return "#9CA3AF";
+
+  if (metric === "ratio") {
+    if (value > 1.5) return "#DC2626";  // deep red
+    if (value > 1.15) return "#EF4444"; // red
+    if (value > 0.85) return "#EAB308"; // yellow
+    if (value > 0.6) return "#22C55E";  // green
+    return "#16A34A";                    // deep green
+  }
+
+  // For demand/capacity: 0-100 scale
+  if (value >= 70) return "#DC2626";
+  if (value >= 50) return "#EAB308";
+  if (value >= 30) return "#22C55E";
+  return "#16A34A";
+}
+
+function getSize(value: number | null, metric: MetricView): number {
+  if (value === null) return 20;
+  if (metric === "ratio") return Math.max(20, Math.min(50, value * 20));
+  return Math.max(20, Math.min(50, value * 0.6));
+}
+
+export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const popupRef = useRef<mapboxgl.Popup | null>(null);
+  const [metric, setMetric] = useState<MetricView>("ratio");
+
+  function getValue(m: MarketPoint, met: MetricView): number | null {
+    if (met === "ratio") return m.ratio;
+    if (met === "demand") return m.demandIndex;
+    return m.capacityIndex;
+  }
+
+  function getLabel(met: MetricView): string {
+    if (met === "ratio") return "D/C Ratio";
+    if (met === "demand") return "Demand Index";
+    return "Capacity Index";
+  }
+
+  useEffect(() => {
+    if (!mapContainer.current) return;
+
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    if (!token) return;
+
+    mapboxgl.accessToken = token;
+
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: "mapbox://styles/mapbox/light-v11",
+      center: [-96, 33],
+      zoom: 4.2,
+    });
+
+    map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
+
+    return () => {
+      map.current?.remove();
+    };
+  }, []);
+
+  // Update markers when metric changes
+  useEffect(() => {
+    if (!map.current) return;
+
+    // Clear existing markers
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    for (const m of markets) {
+      const value = getValue(m, metric);
+      const color = getColor(value, metric);
+      const size = getSize(value, metric);
+
+      // Create marker element
+      const el = document.createElement("div");
+      el.style.width = `${size}px`;
+      el.style.height = `${size}px`;
+      el.style.borderRadius = "50%";
+      el.style.backgroundColor = color;
+      el.style.opacity = "0.85";
+      el.style.border = "2px solid white";
+      el.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
+      el.style.cursor = "pointer";
+      el.style.display = "flex";
+      el.style.alignItems = "center";
+      el.style.justifyContent = "center";
+      el.style.color = "white";
+      el.style.fontSize = "11px";
+      el.style.fontWeight = "700";
+
+      if (value !== null) {
+        el.textContent = metric === "ratio" ? value.toFixed(1) : String(Math.round(value));
+      }
+
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([m.lng, m.lat])
+        .addTo(map.current!);
+
+      // Popup on click
+      el.addEventListener("click", () => {
+        popupRef.current?.remove();
+
+        const statusLabel = m.status === "constrained" ? "Constrained" : m.status === "equilibrium" ? "Equilibrium" : m.status === "favorable" ? "Favorable" : "Unscored";
+        const statusColor = m.status === "constrained" ? "#DC2626" : m.status === "equilibrium" ? "#EAB308" : m.status === "favorable" ? "#16A34A" : "#6B7280";
+
+        const html = `
+          <div style="font-family: system-ui; min-width: 200px;">
+            <div style="font-weight: 700; font-size: 14px; color: #1E293B; margin-bottom: 4px;">${m.shortName}, ${m.state}</div>
+            <div style="display: inline-block; background: ${statusColor}22; color: ${statusColor}; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px; margin-bottom: 8px;">${statusLabel}</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 12px; color: #4B5563;">
+              <div>Demand: <strong style="color: #1E293B;">${m.demandIndex ?? "—"}</strong></div>
+              <div>Capacity: <strong style="color: #1E293B;">${m.capacityIndex ?? "—"}</strong></div>
+              <div>Ratio: <strong style="color: ${statusColor};">${m.ratio?.toFixed(2) ?? "—"}</strong></div>
+              <div>Permits: <strong style="color: #1E293B;">${m.permits?.toLocaleString() ?? "—"}</strong></div>
+              <div>Trade Workers: <strong style="color: #1E293B;">${m.tradeWorkers?.toLocaleString() ?? "—"}</strong></div>
+            </div>
+          </div>
+        `;
+
+        popupRef.current = new mapboxgl.Popup({ offset: 15, maxWidth: "280px" })
+          .setLngLat([m.lng, m.lat])
+          .setHTML(html)
+          .addTo(map.current!);
+      });
+
+      markersRef.current.push(marker);
+    }
+  }, [metric, markets]);
+
+  return (
+    <div className="relative h-full">
+      {/* Metric toggle */}
+      <div className="absolute top-4 left-4 z-10 bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
+        {(["ratio", "demand", "capacity"] as MetricView[]).map((m) => (
+          <button
+            key={m}
+            onClick={() => setMetric(m)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              metric === m
+                ? "bg-[#F97316] text-white"
+                : "text-[#4B5563] hover:bg-gray-100"
+            }`}
+          >
+            {getLabel(m)}
+          </button>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="absolute bottom-6 left-4 z-10 bg-white rounded-lg shadow-lg border border-gray-200 px-4 py-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-2">
+          {getLabel(metric)}
+        </p>
+        {metric === "ratio" ? (
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="w-3 h-3 rounded-full bg-[#16A34A]" /> &lt;0.6
+            <span className="w-3 h-3 rounded-full bg-[#22C55E] ml-1" /> 0.6–0.85
+            <span className="w-3 h-3 rounded-full bg-[#EAB308] ml-1" /> 0.85–1.15
+            <span className="w-3 h-3 rounded-full bg-[#EF4444] ml-1" /> 1.15–1.5
+            <span className="w-3 h-3 rounded-full bg-[#DC2626] ml-1" /> &gt;1.5
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="w-3 h-3 rounded-full bg-[#16A34A]" /> Low
+            <span className="w-3 h-3 rounded-full bg-[#22C55E] ml-1" /> Moderate
+            <span className="w-3 h-3 rounded-full bg-[#EAB308] ml-1" /> High
+            <span className="w-3 h-3 rounded-full bg-[#DC2626] ml-1" /> Very High
+          </div>
+        )}
+      </div>
+
+      <div ref={mapContainer} className="w-full h-full" />
+    </div>
+  );
+}
