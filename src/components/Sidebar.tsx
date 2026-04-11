@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 
 const NAV_ITEMS = [
@@ -74,17 +75,16 @@ export default function Sidebar() {
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0">
       {/* Logo */}
       <div className="px-4 py-5 border-b border-gray-200">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-[#F97316] rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </div>
-          <div>
-            <span className="text-[#1E293B] font-bold text-sm">StrategemSignal</span>
-            <p className="text-[10px] text-[#6B7280] leading-tight">Demand-Capacity Intelligence</p>
-          </div>
-        </div>
+        <Link href="/dashboard">
+          <Image
+            src="/Logo.png"
+            alt="StrategemSignal"
+            width={800}
+            height={160}
+            className="w-full h-auto"
+            priority
+          />
+        </Link>
       </div>
 
       {/* Navigation */}
