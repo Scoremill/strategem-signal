@@ -9,12 +9,13 @@ import {
 import { eq, desc, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import MarketNarrative from "@/components/MarketNarrative";
 
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   constrained: { bg: "bg-red-100", text: "text-red-800", label: "Constrained" },
-  equilibrium: { bg: "bg-yellow-100", text: "text-yellow-800", label: "Equilibrium" },
+  equilibrium: { bg: "bg-amber-100", text: "text-amber-800", label: "Balanced" },
   favorable: { bg: "bg-green-100", text: "text-green-800", label: "Favorable" },
 };
 
@@ -132,6 +133,9 @@ export default async function GeographyDetailPage({
           <p className="text-3xl font-bold text-[#1E293B] mt-1">{totalTradeWorkers.toLocaleString()}</p>
         </div>
       </div>
+
+      {/* AI Market Narrative */}
+      <MarketNarrative geographyId={id} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Permit History */}

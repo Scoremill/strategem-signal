@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   constrained: { bg: "bg-red-100", text: "text-red-800", label: "Constrained" },
-  equilibrium: { bg: "bg-yellow-100", text: "text-yellow-800", label: "Equilibrium" },
+  equilibrium: { bg: "bg-amber-100", text: "text-amber-800", label: "Balanced" },
   favorable: { bg: "bg-green-100", text: "text-green-800", label: "Favorable" },
 };
 

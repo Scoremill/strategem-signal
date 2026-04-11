@@ -39,9 +39,9 @@ function getColor(value: number | null, metric: MetricView): string {
 }
 
 function getSize(value: number | null, metric: MetricView): number {
-  if (value === null) return 20;
-  if (metric === "ratio") return Math.max(20, Math.min(50, value * 20));
-  return Math.max(20, Math.min(50, value * 0.6));
+  if (value === null) return 32;
+  if (metric === "ratio") return Math.max(32, Math.min(52, value * 18));
+  return Math.max(32, Math.min(52, (value / 100) * 52));
 }
 
 export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
@@ -112,8 +112,10 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
       el.style.alignItems = "center";
       el.style.justifyContent = "center";
       el.style.color = "white";
-      el.style.fontSize = "11px";
+      el.style.fontSize = "12px";
       el.style.fontWeight = "700";
+      el.style.textShadow = "0 1px 2px rgba(0,0,0,0.5)";
+      el.style.lineHeight = "1";
 
       if (value !== null) {
         el.textContent = metric === "ratio" ? value.toFixed(1) : String(Math.round(value));
@@ -123,15 +125,16 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
         .setLngLat([m.lng, m.lat])
         .addTo(map.current!);
 
-      // Popup on click
-      el.addEventListener("click", () => {
+      // Popup on click — lazy-load narrative snippet
+      el.addEventListener("click", async () => {
         popupRef.current?.remove();
 
-        const statusLabel = m.status === "constrained" ? "Constrained" : m.status === "equilibrium" ? "Equilibrium" : m.status === "favorable" ? "Favorable" : "Unscored";
-        const statusColor = m.status === "constrained" ? "#DC2626" : m.status === "equilibrium" ? "#EAB308" : m.status === "favorable" ? "#16A34A" : "#6B7280";
+        const statusLabel = m.status === "constrained" ? "Constrained" : m.status === "equilibrium" ? "Balanced" : m.status === "favorable" ? "Favorable" : "Unscored";
+        const statusColor = m.status === "constrained" ? "#DC2626" : m.status === "equilibrium" ? "#D97706" : m.status === "favorable" ? "#16A34A" : "#6B7280";
 
-        const html = `
-          <div style="font-family: system-ui; min-width: 200px;">
+        // Show popup immediately with loading indicator
+        const buildHtml = (snippet?: string) => `
+          <div style="font-family: system-ui; min-width: 220px;">
             <div style="font-weight: 700; font-size: 14px; color: #1E293B; margin-bottom: 4px;">${m.shortName}, ${m.state}</div>
             <div style="display: inline-block; background: ${statusColor}22; color: ${statusColor}; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px; margin-bottom: 8px;">${statusLabel}</div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 12px; color: #4B5563;">
@@ -141,13 +144,29 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
               <div>Permits: <strong style="color: #1E293B;">${m.permits?.toLocaleString() ?? "—"}</strong></div>
               <div>Trade Workers: <strong style="color: #1E293B;">${m.tradeWorkers?.toLocaleString() ?? "—"}</strong></div>
             </div>
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #4B5563; line-height: 1.4;">
+              ${snippet || '<span style="color: #9CA3AF;">Loading intelligence...</span>'}
+            </div>
           </div>
         `;
 
-        popupRef.current = new mapboxgl.Popup({ offset: 15, maxWidth: "280px" })
+        popupRef.current = new mapboxgl.Popup({ offset: 15, maxWidth: "300px" })
           .setLngLat([m.lng, m.lat])
-          .setHTML(html)
+          .setHTML(buildHtml())
           .addTo(map.current!);
+
+        // Fetch narrative snippet
+        try {
+          const res = await fetch(`/api/narrative/${m.id}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.snippet && popupRef.current) {
+              popupRef.current.setHTML(buildHtml(data.snippet));
+            }
+          }
+        } catch {
+          // silently fail — popup still shows data
+        }
       });
 
       markersRef.current.push(marker);

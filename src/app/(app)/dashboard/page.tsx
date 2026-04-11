@@ -110,9 +110,9 @@ export default async function DashboardPage() {
           <p className="text-3xl font-bold text-red-700 mt-1">{constrained}</p>
           <p className="text-[10px] text-[#6B7280] mt-0.5">Ratio &gt; 1.15</p>
         </div>
-        <div className="bg-white rounded-xl border-l-4 border-yellow-500 p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-yellow-600">Equilibrium</p>
-          <p className="text-3xl font-bold text-yellow-700 mt-1">{equilibrium}</p>
+        <div className="bg-white rounded-xl border-l-4 border-amber-500 p-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Balanced</p>
+          <p className="text-3xl font-bold text-amber-800 mt-1">{equilibrium}</p>
           <p className="text-[10px] text-[#6B7280] mt-0.5">Ratio 0.85–1.15</p>
         </div>
         <div className="bg-white rounded-xl border-l-4 border-green-500 p-5">

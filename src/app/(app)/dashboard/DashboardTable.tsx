@@ -5,7 +5,7 @@ import SortableTable from "@/components/SortableTable";
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   constrained: { bg: "bg-red-100", text: "text-red-800", label: "Constrained" },
-  equilibrium: { bg: "bg-yellow-100", text: "text-yellow-800", label: "Equilibrium" },
+  equilibrium: { bg: "bg-amber-100", text: "text-amber-800", label: "Balanced" },
   favorable: { bg: "bg-green-100", text: "text-green-800", label: "Favorable" },
 };
 
@@ -67,7 +67,7 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
             <td className="py-3 px-5 text-center">
               {r.ratio !== null ? (
                 <span className={`text-sm font-bold ${
-                  r.ratio > 1.15 ? "text-red-700" : r.ratio < 0.85 ? "text-green-700" : "text-yellow-700"
+                  r.ratio > 1.15 ? "text-red-700" : r.ratio < 0.85 ? "text-green-700" : "text-amber-700"
                 }`}>
                   {r.ratio.toFixed(2)}
                 </span>
