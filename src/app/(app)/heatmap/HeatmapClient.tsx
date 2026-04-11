@@ -48,7 +48,6 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
-  const popupRef = useRef<mapboxgl.Popup | null>(null);
   const [metric, setMetric] = useState<MetricView>("ratio");
 
   function getValue(m: MarketPoint, met: MetricView): number | null {
@@ -121,53 +120,51 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
         el.textContent = metric === "ratio" ? value.toFixed(1) : String(Math.round(value));
       }
 
-      const marker = new mapboxgl.Marker({ element: el })
-        .setLngLat([m.lng, m.lat])
-        .addTo(map.current!);
+      const statusLabel = m.status === "constrained" ? "Constrained" : m.status === "equilibrium" ? "Balanced" : m.status === "favorable" ? "Favorable" : "Unscored";
+      const statusColor = m.status === "constrained" ? "#DC2626" : m.status === "equilibrium" ? "#D97706" : m.status === "favorable" ? "#16A34A" : "#6B7280";
 
-      // Popup on click — lazy-load narrative snippet
-      el.addEventListener("click", async () => {
-        popupRef.current?.remove();
-
-        const statusLabel = m.status === "constrained" ? "Constrained" : m.status === "equilibrium" ? "Balanced" : m.status === "favorable" ? "Favorable" : "Unscored";
-        const statusColor = m.status === "constrained" ? "#DC2626" : m.status === "equilibrium" ? "#D97706" : m.status === "favorable" ? "#16A34A" : "#6B7280";
-
-        // Show popup immediately with loading indicator
-        const buildHtml = (snippet?: string) => `
-          <div style="font-family: system-ui; min-width: 220px;">
-            <div style="font-weight: 700; font-size: 14px; color: #1E293B; margin-bottom: 4px;">${m.shortName}, ${m.state}</div>
-            <div style="display: inline-block; background: ${statusColor}22; color: ${statusColor}; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px; margin-bottom: 8px;">${statusLabel}</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 12px; color: #4B5563;">
-              <div>Demand: <strong style="color: #1E293B;">${m.demandIndex ?? "—"}</strong></div>
-              <div>Capacity: <strong style="color: #1E293B;">${m.capacityIndex ?? "—"}</strong></div>
-              <div>Ratio: <strong style="color: ${statusColor};">${m.ratio?.toFixed(2) ?? "—"}</strong></div>
-              <div>Permits: <strong style="color: #1E293B;">${m.permits?.toLocaleString() ?? "—"}</strong></div>
-              <div>Trade Workers: <strong style="color: #1E293B;">${m.tradeWorkers?.toLocaleString() ?? "—"}</strong></div>
-            </div>
-            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #4B5563; line-height: 1.4;">
-              ${snippet || '<span style="color: #9CA3AF;">Loading intelligence...</span>'}
-            </div>
+      const popupHtml = `
+        <div style="font-family: system-ui; min-width: 220px;">
+          <div style="font-weight: 700; font-size: 14px; color: #1E293B; margin-bottom: 4px;">${m.shortName}, ${m.state}</div>
+          <div style="display: inline-block; background: ${statusColor}22; color: ${statusColor}; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px; margin-bottom: 8px;">${statusLabel}</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 12px; color: #4B5563;">
+            <div>Demand: <strong style="color: #1E293B;">${m.demandIndex ?? "—"}</strong></div>
+            <div>Capacity: <strong style="color: #1E293B;">${m.capacityIndex ?? "—"}</strong></div>
+            <div>Ratio: <strong style="color: ${statusColor};">${m.ratio?.toFixed(2) ?? "—"}</strong></div>
+            <div>Permits: <strong style="color: #1E293B;">${m.permits?.toLocaleString() ?? "—"}</strong></div>
+            <div>Trade Workers: <strong style="color: #1E293B;">${m.tradeWorkers?.toLocaleString() ?? "—"}</strong></div>
           </div>
-        `;
+          <div id="narrative-${m.id}" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #4B5563; line-height: 1.4;">
+            <span style="color: #9CA3AF;">Loading intelligence...</span>
+          </div>
+        </div>
+      `;
 
-        popupRef.current = new mapboxgl.Popup({ offset: 15, maxWidth: "300px" })
-          .setLngLat([m.lng, m.lat])
-          .setHTML(buildHtml())
-          .addTo(map.current!);
+      const popup = new mapboxgl.Popup({ offset: 15, maxWidth: "300px" })
+        .setHTML(popupHtml);
 
-        // Fetch narrative snippet
+      // Fetch narrative when popup opens
+      popup.on("open", async () => {
         try {
           const res = await fetch(`/api/narrative/${m.id}`, { credentials: "same-origin" });
           if (res.ok) {
             const data = await res.json();
-            if (data.snippet && popupRef.current) {
-              popupRef.current.setHTML(buildHtml(data.snippet));
+            const el2 = document.getElementById(`narrative-${m.id}`);
+            if (el2 && data.snippet) {
+              el2.textContent = data.snippet;
+              el2.style.color = "#4B5563";
             }
           }
         } catch {
-          // silently fail — popup still shows data
+          const el2 = document.getElementById(`narrative-${m.id}`);
+          if (el2) el2.textContent = "";
         }
       });
+
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([m.lng, m.lat])
+        .setPopup(popup)
+        .addTo(map.current!);
 
       markersRef.current.push(marker);
     }
