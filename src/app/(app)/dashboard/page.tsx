@@ -7,15 +7,9 @@ import {
   fetchLogs,
 } from "@/lib/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
-import Link from "next/link";
+import DashboardTable, { DashboardRow } from "./DashboardTable";
 
 export const dynamic = "force-dynamic";
-
-const STATUS_STYLES = {
-  constrained: { bg: "bg-red-100", text: "text-red-800", label: "Constrained" },
-  equilibrium: { bg: "bg-yellow-100", text: "text-yellow-800", label: "Equilibrium" },
-  favorable: { bg: "bg-green-100", text: "text-green-800", label: "Favorable" },
-};
 
 export default async function DashboardPage() {
   const markets = await db.select().from(geographies).orderBy(geographies.shortName);
@@ -27,10 +21,7 @@ export default async function DashboardPage() {
   const maxScoreDate = latestScoreDate[0]?.maxDate;
 
   const scores = maxScoreDate
-    ? await db
-        .select()
-        .from(demandCapacityScores)
-        .where(eq(demandCapacityScores.scoreDate, maxScoreDate))
+    ? await db.select().from(demandCapacityScores).where(eq(demandCapacityScores.scoreDate, maxScoreDate))
     : [];
 
   // Get latest permits per MSA
@@ -63,11 +54,7 @@ export default async function DashboardPage() {
     );
 
   // Get last pipeline run
-  const [lastRun] = await db
-    .select()
-    .from(fetchLogs)
-    .orderBy(desc(fetchLogs.runAt))
-    .limit(1);
+  const [lastRun] = await db.select().from(fetchLogs).orderBy(desc(fetchLogs.runAt)).limit(1);
 
   // Build lookup maps
   const scoreMap = new Map(scores.map((s) => [s.geographyId, s]));
@@ -79,14 +66,27 @@ export default async function DashboardPage() {
   const equilibrium = scores.filter((s) => s.status === "equilibrium").length;
   const favorable = scores.filter((s) => s.status === "favorable").length;
 
-  // Sort markets by ratio (most constrained first)
-  const sortedMarkets = [...markets].sort((a, b) => {
-    const sa = scoreMap.get(a.id);
-    const sb = scoreMap.get(b.id);
-    if (!sa && !sb) return 0;
-    if (!sa) return 1;
-    if (!sb) return -1;
-    return parseFloat(String(sb.demandCapacityRatio)) - parseFloat(String(sa.demandCapacityRatio));
+  // Build table rows
+  const rows: DashboardRow[] = markets.map((m) => {
+    const score = scoreMap.get(m.id);
+    const permit = permitMap.get(m.id);
+    const emp = empMap.get(m.id);
+    const statusOrder = score?.status === "constrained" ? 3 : score?.status === "equilibrium" ? 2 : score?.status === "favorable" ? 1 : 0;
+
+    return {
+      id: m.id,
+      shortName: m.shortName,
+      state: m.state,
+      demandIndex: score ? parseFloat(String(score.demandIndex)) : null,
+      capacityIndex: score ? parseFloat(String(score.capacityIndex)) : null,
+      ratio: score ? parseFloat(String(score.demandCapacityRatio)) : null,
+      status: score?.status ?? null,
+      statusSort: statusOrder,
+      permits: permit?.totalPermits ?? null,
+      singleFamily: permit?.singleFamily ?? null,
+      employment: emp?.totalNonfarm ?? null,
+      unemploymentRate: emp?.unemploymentRate ? parseFloat(String(emp.unemploymentRate)) : null,
+    };
   });
 
   return (
@@ -124,115 +124,19 @@ export default async function DashboardPage() {
           <p className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Last Update</p>
           <p className="text-sm font-medium text-[#1E293B] mt-2">
             {lastRun
-              ? new Date(lastRun.runAt).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                })
+              ? new Date(lastRun.runAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
               : "Never"}
           </p>
         </div>
       </div>
 
-      {/* Market list */}
+      {/* Market table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-[#1E293B]">Markets by Demand-Capacity Ratio</h2>
-          <span className="text-xs text-[#6B7280]">Sorted: most constrained first</span>
+          <span className="text-xs text-[#6B7280]">Click column headers to sort</span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left py-3 px-5 font-medium text-[#6B7280]">Market</th>
-                <th className="text-center py-3 px-5 font-medium text-[#6B7280]">Demand</th>
-                <th className="text-center py-3 px-5 font-medium text-[#6B7280]">Capacity</th>
-                <th className="text-center py-3 px-5 font-medium text-[#6B7280]">D/C Ratio</th>
-                <th className="text-center py-3 px-5 font-medium text-[#6B7280]">Status</th>
-                <th className="text-right py-3 px-5 font-medium text-[#6B7280]">Permits/Mo</th>
-                <th className="text-right py-3 px-5 font-medium text-[#6B7280]">Employment</th>
-                <th className="text-right py-3 px-5 font-medium text-[#6B7280]">Unemp Rate</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {sortedMarkets.map((m) => {
-                const score = scoreMap.get(m.id);
-                const permit = permitMap.get(m.id);
-                const emp = empMap.get(m.id);
-                const style = score
-                  ? STATUS_STYLES[score.status as keyof typeof STATUS_STYLES]
-                  : null;
-                const ratio = score ? parseFloat(String(score.demandCapacityRatio)) : null;
-
-                return (
-                  <tr key={m.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="py-3 px-5 font-medium text-[#1E293B]">
-                      <Link
-                        href={`/geographies/${m.id}`}
-                        className="hover:text-[#F97316] transition-colors"
-                      >
-                        {m.shortName}
-                      </Link>
-                      <span className="text-xs text-[#6B7280] ml-2">{m.state}</span>
-                    </td>
-                    <td className="py-3 px-5 text-center">
-                      {score ? (
-                        <span className="text-sm font-semibold text-[#1E293B]">
-                          {parseFloat(String(score.demandIndex)).toFixed(0)}
-                        </span>
-                      ) : "—"}
-                    </td>
-                    <td className="py-3 px-5 text-center">
-                      {score ? (
-                        <span className="text-sm font-semibold text-[#1E293B]">
-                          {parseFloat(String(score.capacityIndex)).toFixed(0)}
-                        </span>
-                      ) : "—"}
-                    </td>
-                    <td className="py-3 px-5 text-center">
-                      {ratio !== null ? (
-                        <span
-                          className={`text-sm font-bold ${
-                            ratio > 1.15
-                              ? "text-red-700"
-                              : ratio < 0.85
-                                ? "text-green-700"
-                                : "text-yellow-700"
-                          }`}
-                        >
-                          {ratio.toFixed(2)}
-                        </span>
-                      ) : "—"}
-                    </td>
-                    <td className="py-3 px-5 text-center">
-                      {style ? (
-                        <span
-                          className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full ${style.bg} ${style.text}`}
-                        >
-                          {style.label}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">
-                          Unscored
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-5 text-right text-[#1E293B]">
-                      {permit ? Math.round(permit.totalPermits).toLocaleString() : "—"}
-                    </td>
-                    <td className="py-3 px-5 text-right text-[#1E293B]">
-                      {emp?.totalNonfarm ? (emp.totalNonfarm / 1000).toFixed(0) + "K" : "—"}
-                    </td>
-                    <td className="py-3 px-5 text-right text-[#6B7280]">
-                      {emp?.unemploymentRate ? `${emp.unemploymentRate}%` : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DashboardTable rows={rows} />
       </div>
     </div>
   );
