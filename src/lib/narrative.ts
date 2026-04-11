@@ -44,7 +44,13 @@ Use specific numbers from the data provided. Do not speculate beyond the data. D
 The Demand-Capacity Ratio is the key metric:
 - Above 1.15 = Constrained: demand exceeds trade capacity, expect longer cycle times and cost pressure
 - 0.85 to 1.15 = Balanced: demand and capacity in equilibrium
-- Below 0.85 = Favorable: capacity available for expansion, trade pricing leverage for builders`;
+- Below 0.85 = Favorable: capacity available for expansion, trade pricing leverage for builders
+
+When analyzing the data, note these market-specific factors:
+- If trade worker count is high but establishment count is low, flag potential market concentration (a few large firms dominating). This affects builder negotiating leverage.
+- If wage growth exceeds 5% YoY, call out specific cost pressure implications for builder margins.
+- If unemployment is very low (under 3.5%), note that the tight labor market extends beyond construction trades.
+- Compare permits-to-workers ratio implicitly — high permits with low trade workers = cycle time risk.`;
 
 export async function generateMarketNarrative(
   market: MarketData

@@ -29,6 +29,10 @@ export async function middleware(request: NextRequest) {
   // Check session
   const token = request.cookies.get(COOKIE_NAME)?.value;
   if (!token) {
+    // API routes get 401 JSON, pages get redirected
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 
@@ -36,6 +40,9 @@ export async function middleware(request: NextRequest) {
     await jwtVerify(token, getSecret());
     return NextResponse.next();
   } catch {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Session expired" }, { status: 401 });
+    }
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 }

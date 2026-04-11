@@ -9,7 +9,7 @@ export default function MarketNarrative({ geographyId }: { geographyId: string }
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/narrative/${geographyId}`);
+        const res = await fetch(`/api/narrative/${geographyId}`, { credentials: "same-origin" });
         if (res.ok) {
           const data = await res.json();
           setNarrative(data.full || null);

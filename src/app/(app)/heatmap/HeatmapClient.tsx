@@ -157,7 +157,7 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
 
         // Fetch narrative snippet
         try {
-          const res = await fetch(`/api/narrative/${m.id}`);
+          const res = await fetch(`/api/narrative/${m.id}`, { credentials: "same-origin" });
           if (res.ok) {
             const data = await res.json();
             if (data.snippet && popupRef.current) {
