@@ -1,0 +1,27 @@
+name: Quarterly Capacity Data Fetch
+
+on:
+  schedule:
+    # 15th of Jan, Apr, Jul, Oct at 7:00 AM CT (12:00 UTC)
+    # QCEW publishes ~3-4 months after quarter-end
+    - cron: '0 12 15 1,4,7,10 *'
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  fetch-capacity-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch capacity data (QCEW trade employment/wages)
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.APP_URL }}/api/cron/capacity" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Capacity fetch response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Capacity fetch failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
