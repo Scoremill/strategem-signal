@@ -230,4 +230,165 @@ export const MSA_SERIES: Record<
     unemploymentRate: "BOIS216URN",
     population: "BOIPOP",
   },
+  // ─── New markets added 2026-04 ─────────────────────────────────
+  "35620": {
+    // New York-Newark-Jersey City
+    totalPermits: "NEWY636BPPRIVSA",
+    singleFamilyPermits: "NEWY636BP1FHSA",
+    nonfarmEmployment: "NEWY636NA",
+    unemploymentRate: "NEWY636URN",
+    population: "NYTPOP",
+  },
+  "31080": {
+    // Los Angeles-Long Beach-Anaheim
+    totalPermits: "LOSA106BPPRIVSA",
+    singleFamilyPermits: "LOSA106BP1FHSA",
+    nonfarmEmployment: "SMS06310800000000001",
+    unemploymentRate: "LOSA106URN",
+    population: "LNAPOP",
+  },
+  "37980": {
+    // Philadelphia-Camden-Wilmington
+    totalPermits: "PHIL942BPPRIVSA",
+    singleFamilyPermits: "PHIL942BP1FHSA",
+    nonfarmEmployment: "PHIL942NA",
+    unemploymentRate: "PHIL942URN",
+    population: "PCWPOP",
+  },
+  "33100": {
+    // Miami-Fort Lauderdale-Pompano Beach
+    totalPermits: "MIAM112BPPRIVSA",
+    singleFamilyPermits: "MIAM112BP1FHSA",
+    nonfarmEmployment: "MIAM112NA",
+    unemploymentRate: "MIAM112URN",
+    population: "MIMPOP",
+  },
+  "14460": {
+    // Boston-Cambridge-Newton
+    totalPermits: "BOST625BPPRIVSA",
+    singleFamilyPermits: "BOST625BP1FHSA",
+    nonfarmEmployment: "BOST625NA",
+    unemploymentRate: "BOST625URN",
+    population: "BOSPOP",
+  },
+  "19820": {
+    // Detroit-Warren-Dearborn
+    totalPermits: "DETR826BPPRIVSA",
+    singleFamilyPermits: "DETR826BP1FHSA",
+    nonfarmEmployment: "DETR826NA",
+    unemploymentRate: "DETR826URN",
+    population: "DWLPOP",
+  },
+  "41860": {
+    // San Francisco-Oakland-Berkeley
+    totalPermits: "SANF806BPPRIVSA",
+    singleFamilyPermits: "SANF806BP1FHSA",
+    nonfarmEmployment: "SANF806NA",
+    unemploymentRate: "SANF806URN",
+    population: "SFCPOP",
+  },
+  "42660": {
+    // Seattle-Tacoma-Bellevue
+    totalPermits: "SEAT653BPPRIVSA",
+    singleFamilyPermits: "SEAT653BP1FHSA",
+    nonfarmEmployment: "SEAT653NA",
+    unemploymentRate: "SEAT653URN",
+    population: "STWPOP",
+  },
+  "33460": {
+    // Minneapolis-St. Paul-Bloomington
+    totalPermits: "MINN427BPPRIVSA",
+    singleFamilyPermits: "MINN427BP1FHSA",
+    nonfarmEmployment: "MINN427NA",
+    unemploymentRate: "MINN427URN",
+    population: "MSPPOP",
+  },
+  "41740": {
+    // San Diego-Chula Vista-Carlsbad
+    totalPermits: "SAND706BPPRIVSA",
+    singleFamilyPermits: "SAND706BP1FHSA",
+    nonfarmEmployment: "SAND706NA",
+    unemploymentRate: "SAND706URN",
+    population: "SDIPOP",
+  },
+  "45060": {
+    // Sacramento-Roseville-Folsom
+    totalPermits: "SACR906BPPRIVSA",
+    singleFamilyPermits: "SACR906BP1FHSA",
+    nonfarmEmployment: "SACR906NA",
+    unemploymentRate: "SACR906URN",
+    population: "SYOPOP",
+  },
+  "40140": {
+    // Riverside-San Bernardino-Ontario
+    totalPermits: "RIVE106BPPRIVSA",
+    singleFamilyPermits: "RIVE106BP1FHSA",
+    nonfarmEmployment: "RIVE106NA",
+    unemploymentRate: "RIVE106URN",
+    population: "RSBPOP",
+  },
+  "12580": {
+    // Baltimore-Columbia-Towson
+    totalPermits: "BALT524BPPRIVSA",
+    singleFamilyPermits: "BALT524BP1FHSA",
+    nonfarmEmployment: "BALT524NA",
+    unemploymentRate: "BALT524URN",
+    population: "BTMPOP",
+  },
+  "18140": {
+    // Columbus, OH
+    totalPermits: "COLU139BPPRIVSA",
+    singleFamilyPermits: "COLU139BP1FHSA",
+    nonfarmEmployment: "COLU139NA",
+    unemploymentRate: "COLU139URN",
+    population: "COLPOP",
+  },
+  "31140": {
+    // Louisville/Jefferson County
+    totalPermits: "LOIBPPRIVSA",
+    singleFamilyPermits: "LOIBP1FHSA",
+    nonfarmEmployment: "LOINA",
+    unemploymentRate: "LOIURN",
+    population: "LOIPOP",
+  },
+  "33340": {
+    // Milwaukee-Waukesha
+    totalPermits: "MILW355BPPRIVSA",
+    singleFamilyPermits: "MILW355BP1FHSA",
+    nonfarmEmployment: "MILW355NA",
+    unemploymentRate: "MILW355URN",
+    population: "MWKPOP",
+  },
+  "41620": {
+    // Salt Lake City
+    totalPermits: "SALT649BPPRIVSA",
+    singleFamilyPermits: "SALT649BP1FHSA",
+    nonfarmEmployment: "SALT649NA",
+    unemploymentRate: "SALT649URN",
+    population: "SLCPOP",
+  },
+  "16700": {
+    // Charleston-North Charleston
+    totalPermits: "CHAR745BPPRIVSA",
+    singleFamilyPermits: "CHAR745BP1FHSA",
+    nonfarmEmployment: "CHAR745NA",
+    unemploymentRate: "CHAR745URN",
+    population: "CRLPOP",
+  },
+  "15980": {
+    // Cape Coral-Fort Myers
+    totalPermits: "CAPE912BPPRIVSA",
+    singleFamilyPermits: "CAPE912BP1FHSA",
+    nonfarmEmployment: "CAPE912NA",
+    unemploymentRate: "CAPE912URN",
+    population: "FTMPOP",
+  },
+  "34820": {
+    // Myrtle Beach-Conway-North Myrtle Beach
+    totalPermits: "MYRT845BPPRIVSA",
+    singleFamilyPermits: "MYRT845BP1FHSA",
+    nonfarmEmployment: "MYRT845NA",
+    unemploymentRate: "MYRT845URN",
+    population: "MYRPOP",
+  },
 };
