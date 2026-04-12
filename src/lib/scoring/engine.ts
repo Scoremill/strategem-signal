@@ -39,10 +39,25 @@ const CAPACITY_WEIGHTS = {
   permitsPerWorker: 0.30, // INVERSE — high ratio = capacity stress
 };
 
+// Permit-to-Starts conversion factors by state group
+// Sun Belt markets convert more permits to starts due to milder weather
+// and faster cycle times. Mountain West has more weather-related delays.
+const PERMIT_TO_STARTS_FACTOR: Record<string, number> = {
+  // Sun Belt (90%)
+  TX: 0.90, AZ: 0.90, NV: 0.90, FL: 0.90, GA: 0.90, NC: 0.90, SC: 0.90, TN: 0.90,
+  // Mountain West / colder (85%)
+  CO: 0.85, ID: 0.85, UT: 0.85, MT: 0.85, WY: 0.85,
+};
+
+function getStartsConversionFactor(state: string): number {
+  return PERMIT_TO_STARTS_FACTOR[state] ?? 0.87; // default
+}
+
 // ─── Types ───────────────────────────────────────────────────────
 interface MarketMetrics {
   geographyId: string;
   shortName: string;
+  state: string;
   // Demand raw values
   latestPermits: number | null;
   permitGrowthYoy: number | null;
@@ -80,6 +95,8 @@ interface ScoredMarket {
   status: "favorable" | "equilibrium" | "constrained";
   // Trade Availability: workers per permit, adjusted for wage pressure
   tradeAvailability: number;
+  // Estimated monthly starts derived from permits × state conversion factor
+  estMonthlyStarts: number;
 }
 
 // ─── Percentile Ranking ──────────────────────────────────────────
@@ -209,6 +226,7 @@ async function collectMarketMetrics(): Promise<MarketMetrics[]> {
     metrics.push({
       geographyId: market.id,
       shortName: market.shortName,
+      state: market.state,
       latestPermits,
       permitGrowthYoy,
       latestEmployment: latestEmp?.totalNonfarm ?? null,
@@ -307,6 +325,12 @@ function scoreMarkets(metrics: MarketMetrics[]): ScoredMarket[] {
       ? Math.round(rawAvailability * wageStabilityFactor * 100) / 100
       : 0;
 
+    // Estimated Monthly Starts = permits × state conversion factor
+    const startsConversionFactor = getStartsConversionFactor(m.state);
+    const estMonthlyStarts = m.latestPermits
+      ? Math.round(m.latestPermits * startsConversionFactor)
+      : 0;
+
     return {
       geographyId: m.geographyId,
       shortName: m.shortName,
@@ -323,6 +347,7 @@ function scoreMarkets(metrics: MarketMetrics[]): ScoredMarket[] {
       demandCapacityRatio,
       status,
       tradeAvailability,
+      estMonthlyStarts,
     };
   });
 }
@@ -385,6 +410,7 @@ async function persistScores(scored: ScoredMarket[], scoreDate: string): Promise
         demandCapacityRatio: String(s.demandCapacityRatio),
         status: s.status,
         tradeAvailability: String(s.tradeAvailability),
+        estMonthlyStarts: s.estMonthlyStarts,
         demandPercentileRank: String(demandPctls[i]),
         capacityPercentileRank: String(capPctls[i]),
         ratioPercentileRank: String(ratioPctls[i]),

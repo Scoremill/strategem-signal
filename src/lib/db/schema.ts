@@ -255,6 +255,8 @@ export const demandCapacityScores = pgTable(
     velocity12mRatio: decimal("velocity_12m_ratio", { precision: 6, scale: 3 }),
     // Trade Availability: workers per permit adjusted for wage pressure
     tradeAvailability: decimal("trade_availability", { precision: 8, scale: 2 }),
+    // Estimated Monthly Starts: derived from permit volume × regional conversion factor
+    estMonthlyStarts: integer("est_monthly_starts"),
     // Percentile rankings across all MSAs
     demandPercentileRank: decimal("demand_percentile_rank", { precision: 5, scale: 2 }),
     capacityPercentileRank: decimal("capacity_percentile_rank", { precision: 5, scale: 2 }),

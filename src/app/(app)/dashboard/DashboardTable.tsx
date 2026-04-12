@@ -16,6 +16,7 @@ const COLUMNS = [
   { key: "ratio", label: "D/C Ratio", align: "center" as const },
   { key: "statusSort", label: "Status", align: "center" as const },
   { key: "permits", label: "Permits/Mo", align: "right" as const },
+  { key: "estStarts", label: "Est. Starts/Mo", align: "right" as const },
   { key: "employment", label: "Employment", align: "right" as const },
   { key: "unemploymentRate", label: "Unemp Rate", align: "right" as const },
 ];
@@ -31,6 +32,7 @@ export interface DashboardRow {
   statusSort: number;
   permits: number | null;
   singleFamily: number | null;
+  estStarts: number | null;
   employment: number | null;
   unemploymentRate: number | null;
 }
@@ -84,6 +86,9 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
             </td>
             <td className="py-3 px-5 text-right text-[#1E293B]">
               {r.permits !== null ? Math.round(r.permits).toLocaleString() : "—"}
+            </td>
+            <td className="py-3 px-5 text-right text-[#1E293B]">
+              {r.estStarts !== null ? r.estStarts.toLocaleString() : "—"}
             </td>
             <td className="py-3 px-5 text-right text-[#1E293B]">
               {r.employment !== null ? (r.employment / 1000).toFixed(0) + "K" : "—"}

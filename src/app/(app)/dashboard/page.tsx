@@ -99,6 +99,7 @@ export default async function DashboardPage() {
       statusSort: statusOrder,
       permits: permit?.totalPermits ?? null,
       singleFamily: permit?.singleFamily ?? null,
+      estStarts: score?.estMonthlyStarts ?? null,
       employment: emp?.totalNonfarm ?? null,
       unemploymentRate: urMap.get(m.id) ? parseFloat(String(urMap.get(m.id))) : (emp?.unemploymentRate ? parseFloat(String(emp.unemploymentRate)) : null),
     };
