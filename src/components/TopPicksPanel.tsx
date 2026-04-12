@@ -52,19 +52,22 @@ export default function TopPicksPanel({ isOpen, onClose }: TopPicksPanelProps) {
         isOpen ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 translate-x-4 pointer-events-none"
       }`}
     >
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 flex-shrink-0">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[#EA580C]">
-          Favorable For Capital Deployment
-        </p>
-        <button
-          onClick={onClose}
-          aria-label="Close panel"
-          className="p-1 -m-1 rounded text-[#6B7280] hover:bg-gray-100 hover:text-[#1E293B] transition-colors"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#EA580C]">
+            Top Picks
+          </p>
+          <button
+            onClick={onClose}
+            aria-label="Close panel"
+            className="p-1 -m-1 rounded text-[#6B7280] hover:bg-gray-100 hover:text-[#1E293B] transition-colors flex-shrink-0"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <p className="text-[10px] text-[#6B7280] mt-0.5">Favorable for capital deployment</p>
       </div>
 
       <div className="overflow-y-auto p-4 flex-1">

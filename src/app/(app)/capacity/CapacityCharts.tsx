@@ -36,29 +36,35 @@ function getWageColor(wageYoy: number): string {
   return "#16A34A";
 }
 
-// Fixed quadrant thresholds — drawn at economically meaningful values, NOT at
-// sample means. Each market sits in the quadrant its OWN data places it in.
-//
-//   AVAILABILITY_THRESHOLD = 30 — workers per monthly permit, wage-adjusted.
-//     Below this, trades cannot keep pace with new starts. Operator-validated.
-//   DEMAND_THRESHOLD = 50 — Demand Index midpoint (composite of permits,
-//     employment, migration, income, unemployment).
-const AVAILABILITY_THRESHOLD = 30;
+// Demand Index midpoint — fixed at 50 (the percentile rank median).
 const DEMAND_THRESHOLD = 50;
 
-function getQuadrantColor(tradeAvailability: number, demandIndex: number): string {
+function getQuadrantColor(workers: number, demandIndex: number, workerThreshold: number): string {
   const highDemand = demandIndex >= DEMAND_THRESHOLD;
-  const highAvailability = tradeAvailability >= AVAILABILITY_THRESHOLD;
-  if (highDemand && highAvailability) return "#16A34A";  // Top-right: Best Markets
-  if (highDemand && !highAvailability) return "#DC2626"; // Top-left: Worst Markets
-  if (!highDemand && highAvailability) return "#D97706"; // Bottom-right: Untapped Capacity
-  return "#9CA3AF";                                       // Bottom-left: Low Opportunity
+  const highWorkers = workers >= workerThreshold;
+  if (highDemand && highWorkers) return "#16A34A";   // Top-right: Best Markets
+  if (highDemand && !highWorkers) return "#DC2626";  // Top-left: Worst Markets
+  if (!highDemand && highWorkers) return "#D97706";  // Bottom-right: Untapped Capacity
+  return "#9CA3AF";                                   // Bottom-left: Low Opportunity
+}
+
+function median(values: number[]): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
 export default function CapacityCharts({ markets }: { markets: CapacityMarket[] }) {
-  // Quadrant chart data — Trade Availability (x) vs Demand Index (y)
+  // X-axis = raw trade worker count (skilled labor supply). The vertical
+  // dividing line is drawn at the median worker count across all 52 markets,
+  // so half the portfolio sits on each side and Houston/NYC/LA-class markets
+  // land on the right while small metros land on the left.
+  const workerThreshold = median(markets.map((m) => m.totalEmployment));
+
+  // Quadrant chart data — Trade Workers (x) vs Demand Index (y)
   const scatterData = markets.map((m) => ({
-    x: m.tradeAvailability,
+    x: m.totalEmployment,
     y: m.demandIndex,
     z: m.totalEstablishments,
     name: m.shortName,
@@ -112,8 +118,8 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
               <XAxis
                 type="number"
                 dataKey="x"
-                name="Trade Availability"
-                tickFormatter={(v) => v.toFixed(0)}
+                name="Trade Workers"
+                tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`}
                 label={{ value: "Trade Availability (skilled labor supply) →", position: "insideBottom", offset: -10, style: { fontSize: 11, fill: "#6B7280" } }}
                 stroke="#9CA3AF"
                 tick={{ fontSize: 11 }}
@@ -129,18 +135,16 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                 tick={{ fontSize: 11 }}
               />
               <ReferenceLine
-                x={AVAILABILITY_THRESHOLD}
+                x={workerThreshold}
                 stroke="#1E293B"
                 strokeWidth={2}
                 ifOverflow="extendDomain"
-                label={{ value: `Availability ${AVAILABILITY_THRESHOLD}`, position: "insideTopRight", style: { fontSize: 10, fill: "#1E293B", fontWeight: 600 } }}
               />
               <ReferenceLine
                 y={DEMAND_THRESHOLD}
                 stroke="#1E293B"
                 strokeWidth={2}
                 ifOverflow="extendDomain"
-                label={{ value: `Demand ${DEMAND_THRESHOLD}`, position: "insideRight", style: { fontSize: 10, fill: "#1E293B", fontWeight: 600 } }}
               />
               <Tooltip
                 content={({ payload }) => {
@@ -149,10 +153,9 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                   return (
                     <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs">
                       <p className="font-semibold text-[#1E293B]">{d.name}</p>
-                      <p className="text-[#6B7280]">Trade Availability: {d.x.toFixed(1)}</p>
+                      <p className="text-[#6B7280]">Trade Workers: {d.workers?.toLocaleString()}</p>
                       <p className="text-[#6B7280]">Demand Index: {d.demandIndex}</p>
                       <p className="text-[#6B7280]">Capacity Index: {d.capacityIndex}</p>
-                      <p className="text-[#6B7280]">Trade Workers: {d.workers?.toLocaleString()}</p>
                       <p className="text-[#6B7280]">Wage Growth: {d.wageYoy}%</p>
                     </div>
                   );
@@ -162,7 +165,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                 {scatterData.map((entry, i) => (
                   <Cell
                     key={i}
-                    fill={getQuadrantColor(entry.x, entry.y)}
+                    fill={getQuadrantColor(entry.x, entry.y, workerThreshold)}
                     fillOpacity={0.85}
                     r={Math.max(8, Math.min(18, (entry.z || 1000) / 500))}
                   />
