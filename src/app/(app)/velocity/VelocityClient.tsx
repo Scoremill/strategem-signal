@@ -129,7 +129,7 @@ export default function VelocityClient({ markets }: { markets: MarketData[] }) {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[#6B7280]">Employment</span>
-                    <span className="font-medium text-[#1E293B]">{m.employment ? (m.employment / 1000).toFixed(0) + "K" : "—"}</span>
+                    <span className="font-medium text-[#1E293B]">{m.employment ? (m.employment >= 1_000_000 ? (m.employment / 1_000_000).toFixed(2) + "M" : (m.employment / 1000).toFixed(0) + "K") : "—"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[#6B7280]">Unemployment</span>

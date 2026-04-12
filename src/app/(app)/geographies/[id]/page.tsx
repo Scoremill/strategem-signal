@@ -187,7 +187,7 @@ export default async function GeographyDetailPage({
                     <td className="py-2 px-5 text-[#1E293B]">
                       {new Date(e.periodDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
                     </td>
-                    <td className="py-2 px-5 text-right font-medium text-[#1E293B]">{e.totalNonfarm ? (e.totalNonfarm / 1000).toFixed(0) + "K" : "—"}</td>
+                    <td className="py-2 px-5 text-right font-medium text-[#1E293B]">{e.totalNonfarm ? (e.totalNonfarm >= 1_000_000 ? (e.totalNonfarm / 1_000_000).toFixed(2) + "M" : (e.totalNonfarm / 1000).toFixed(0) + "K") : "—"}</td>
                     <td className="py-2 px-5 text-right text-[#6B7280]">{e.unemploymentRate ? `${e.unemploymentRate}%` : "—"}</td>
                   </tr>
                 ))}

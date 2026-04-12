@@ -71,7 +71,7 @@ Data:
 - Capacity Index: ${market.capacityIndex}/100
 - Demand-Capacity Ratio: ${market.ratio.toFixed(2)} (${statusLabel})
 - Monthly Building Permits: ${market.permits?.toLocaleString() ?? "N/A"}
-- Total Nonfarm Employment: ${market.employment ? (market.employment / 1000).toFixed(0) + "K" : "N/A"}
+- Total Nonfarm Employment: ${market.employment ? (market.employment >= 1_000_000 ? (market.employment / 1_000_000).toFixed(2) + "M" : (market.employment / 1000).toFixed(0) + "K") : "N/A"}
 - Unemployment Rate: ${market.unemploymentRate ? market.unemploymentRate + "%" : "N/A"}
 - Trade Construction Workers: ${market.tradeWorkers?.toLocaleString() ?? "N/A"}
 - Trade Wage Growth (YoY): ${market.wageGrowthYoy ? market.wageGrowthYoy + "%" : "N/A"}

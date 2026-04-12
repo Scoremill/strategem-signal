@@ -91,7 +91,7 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
               {r.estStarts !== null ? r.estStarts.toLocaleString() : "—"}
             </td>
             <td className="py-3 px-5 text-right text-[#1E293B]">
-              {r.employment !== null ? (r.employment / 1000).toFixed(0) + "K" : "—"}
+              {r.employment !== null ? (r.employment >= 1_000_000 ? (r.employment / 1_000_000).toFixed(2) + "M" : (r.employment / 1000).toFixed(0) + "K") : "—"}
             </td>
             <td className="py-3 px-5 text-right text-[#6B7280]">
               {r.unemploymentRate !== null ? `${r.unemploymentRate}%` : "—"}
