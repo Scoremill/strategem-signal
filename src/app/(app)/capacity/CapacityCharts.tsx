@@ -36,31 +36,25 @@ function getWageColor(wageYoy: number): string {
   return "#16A34A";
 }
 
-// Demand Index midpoint — fixed at 50 (the percentile rank median).
-const DEMAND_THRESHOLD = 50;
-
-function getQuadrantColor(workers: number, demandIndex: number, workerThreshold: number): string {
-  const highDemand = demandIndex >= DEMAND_THRESHOLD;
-  const highWorkers = workers >= workerThreshold;
-  if (highDemand && highWorkers) return "#16A34A";   // Top-right: Best Markets
-  if (highDemand && !highWorkers) return "#DC2626";  // Top-left: Worst Markets
-  if (!highDemand && highWorkers) return "#D97706";  // Bottom-right: Untapped Capacity
-  return "#9CA3AF";                                   // Bottom-left: Low Opportunity
-}
-
-function median(values: number[]): number {
-  if (!values.length) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+// Dot color reflects the market's own D/C Ratio status — independent of
+// which quadrant it sits in. A market in the top-right (high demand, high
+// trades) can still be amber if its trades are barely keeping pace with
+// its demand.
+function getStatusColor(status: string): string {
+  if (status === "constrained") return "#DC2626"; // red
+  if (status === "equilibrium") return "#D97706"; // amber
+  return "#16A34A";                                // green (favorable)
 }
 
 export default function CapacityCharts({ markets }: { markets: CapacityMarket[] }) {
-  // X-axis = raw trade worker count (skilled labor supply). The vertical
-  // dividing line is drawn at the median worker count across all 52 markets,
-  // so half the portfolio sits on each side and Houston/NYC/LA-class markets
-  // land on the right while small metros land on the left.
-  const workerThreshold = median(markets.map((m) => m.totalEmployment));
+  // X-axis = raw trade workers in the market. Y-axis = blended Homebuilder
+  // Demand Index (0-100). Quadrant lines cross at the VISUAL center of each
+  // axis so the chart is split into 4 even quadrants.
+  const maxWorkers = Math.max(...markets.map((m) => m.totalEmployment), 1);
+  // Round up to a clean tick value so the center line lands on a round number.
+  const xDomainMax = Math.ceil(maxWorkers / 50000) * 50000;
+  const xCenter = xDomainMax / 2;
+  const yCenter = 50; // Demand Index is already 0-100
 
   // Quadrant chart data — Trade Workers (x) vs Demand Index (y)
   const scatterData = markets.map((m) => ({
@@ -119,6 +113,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                 type="number"
                 dataKey="x"
                 name="Trade Workers"
+                domain={[0, xDomainMax]}
                 tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`}
                 label={{ value: "Trade Availability (skilled labor supply) →", position: "insideBottom", offset: -10, style: { fontSize: 11, fill: "#6B7280" } }}
                 stroke="#9CA3AF"
@@ -135,16 +130,14 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                 tick={{ fontSize: 11 }}
               />
               <ReferenceLine
-                x={workerThreshold}
+                x={xCenter}
                 stroke="#1E293B"
                 strokeWidth={2}
-                ifOverflow="extendDomain"
               />
               <ReferenceLine
-                y={DEMAND_THRESHOLD}
+                y={yCenter}
                 stroke="#1E293B"
                 strokeWidth={2}
-                ifOverflow="extendDomain"
               />
               <Tooltip
                 content={({ payload }) => {
@@ -165,7 +158,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                 {scatterData.map((entry, i) => (
                   <Cell
                     key={i}
-                    fill={getQuadrantColor(entry.x, entry.y, workerThreshold)}
+                    fill={getStatusColor(entry.status)}
                     fillOpacity={0.85}
                     r={Math.max(8, Math.min(18, (entry.z || 1000) / 500))}
                   />
