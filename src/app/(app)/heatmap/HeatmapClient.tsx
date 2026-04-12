@@ -181,11 +181,12 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
         </div>
       </div>
 
-      {/* Toggle button for the floating panel */}
+      {/* Toggle button for the floating panel — positioned below the mapbox
+          zoom controls (top-right) so they don't overlap. */}
       <button
         onClick={() => setPanelOpen((v) => !v)}
         aria-label={panelOpen ? "Close intelligence panel" : "Open intelligence panel"}
-        className={`absolute top-4 right-4 z-30 inline-flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg border transition-colors ${
+        className={`absolute top-28 right-4 z-30 inline-flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg border transition-colors ${
           panelOpen
             ? "bg-[#F97316] text-white border-[#EA580C] hover:bg-[#EA580C]"
             : "bg-white text-[#1E293B] border-gray-200 hover:bg-gray-50"

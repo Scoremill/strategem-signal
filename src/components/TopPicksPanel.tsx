@@ -48,7 +48,7 @@ export default function TopPicksPanel({ isOpen, onClose }: TopPicksPanelProps) {
   return (
     <div
       aria-hidden={!isOpen}
-      className={`absolute top-4 right-4 z-20 w-80 max-w-[90vw] max-h-[calc(100%-2rem)] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col transform transition-all duration-200 ease-out ${
+      className={`absolute top-28 right-4 z-20 w-80 max-w-[90vw] max-h-[calc(100%-8rem)] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col transform transition-all duration-200 ease-out ${
         isOpen ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 translate-x-4 pointer-events-none"
       }`}
     >

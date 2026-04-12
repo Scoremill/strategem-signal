@@ -64,6 +64,7 @@ export default async function CapacityPage() {
         avgWageYoy: Number(cap.avgWageYoy),
         avgEmpYoy: Number(cap.avgEmpYoy),
         capacityIndex: score ? parseFloat(String(score.capacityIndex)) : 50,
+        demandIndex: score ? parseFloat(String(score.demandIndex)) : 50,
         status: score?.status ?? "equilibrium",
         tradeAvailability: score?.tradeAvailability ? parseFloat(String(score.tradeAvailability)) : 0,
       };

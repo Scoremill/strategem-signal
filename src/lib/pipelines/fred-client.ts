@@ -564,6 +564,7 @@ export const MSA_DEMAND_COUNTY_FALLBACK: Record<string, {
   "39300": {
     counties: ["044007", "044003", "044005", "044009", "044001", "025005"],
     msaEmployment: "SMS44393000000000001",
+    msaUnemployment: "PROV244URN", // Providence-Warwick NECTA UR (only avail series for this MSA)
     msaPopulation: "PRIPOP",
   },
   // Provo-Orem-Lehi: no MSA permits

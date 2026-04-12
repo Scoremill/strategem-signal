@@ -8,6 +8,7 @@ import {
 } from "@/lib/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import DashboardTable, { DashboardRow } from "./DashboardTable";
+import CollapsibleSection from "./CollapsibleSection";
 import PortfolioIntelligence from "@/components/PortfolioIntelligence";
 
 export const dynamic = "force-dynamic";
@@ -162,7 +163,9 @@ export default async function DashboardPage() {
           </div>
           <span className="text-xs text-[#6B7280]">Click column headers to sort</span>
         </div>
-        <DashboardTable rows={rows} />
+        <CollapsibleSection collapsedHeight={520}>
+          <DashboardTable rows={rows} />
+        </CollapsibleSection>
       </div>
     </div>
   );

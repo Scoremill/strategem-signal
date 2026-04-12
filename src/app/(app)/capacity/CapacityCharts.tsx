@@ -12,6 +12,7 @@ import {
   BarChart,
   Bar,
   ReferenceLine,
+  LabelList,
 } from "recharts";
 
 interface CapacityMarket {
@@ -23,14 +24,9 @@ interface CapacityMarket {
   avgWageYoy: number;
   avgEmpYoy: number;
   capacityIndex: number;
+  demandIndex: number;
   status: string;
   tradeAvailability: number;
-}
-
-function getStatusColor(status: string): string {
-  if (status === "constrained") return "#DC2626";
-  if (status === "equilibrium") return "#D97706";
-  return "#16A34A";
 }
 
 function getWageColor(wageYoy: number): string {
@@ -40,16 +36,37 @@ function getWageColor(wageYoy: number): string {
   return "#16A34A";
 }
 
+// Fixed quadrant thresholds — drawn at economically meaningful values, NOT at
+// sample means. Each market sits in the quadrant its OWN data places it in.
+//
+//   AVAILABILITY_THRESHOLD = 30 — workers per monthly permit, wage-adjusted.
+//     Below this, trades cannot keep pace with new starts. Operator-validated.
+//   DEMAND_THRESHOLD = 50 — Demand Index midpoint (composite of permits,
+//     employment, migration, income, unemployment).
+const AVAILABILITY_THRESHOLD = 30;
+const DEMAND_THRESHOLD = 50;
+
+function getQuadrantColor(tradeAvailability: number, demandIndex: number): string {
+  const highDemand = demandIndex >= DEMAND_THRESHOLD;
+  const highAvailability = tradeAvailability >= AVAILABILITY_THRESHOLD;
+  if (highDemand && highAvailability) return "#16A34A";  // Top-right: Best Markets
+  if (highDemand && !highAvailability) return "#DC2626"; // Top-left: Worst Markets
+  if (!highDemand && highAvailability) return "#D97706"; // Bottom-right: Untapped Capacity
+  return "#9CA3AF";                                       // Bottom-left: Low Opportunity
+}
+
 export default function CapacityCharts({ markets }: { markets: CapacityMarket[] }) {
-  // Quadrant chart data — Trade Availability (x) vs Wage Pressure (y)
+  // Quadrant chart data — Trade Availability (x) vs Demand Index (y)
   const scatterData = markets.map((m) => ({
     x: m.tradeAvailability,
-    y: m.avgWageYoy,
+    y: m.demandIndex,
     z: m.totalEstablishments,
     name: m.shortName,
     status: m.status,
     capacityIndex: m.capacityIndex,
+    demandIndex: m.demandIndex,
     workers: m.totalEmployment,
+    wageYoy: m.avgWageYoy,
   }));
 
   // Ranked bar data — sorted by capacity index
@@ -64,47 +81,32 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
 
   const avgCapacity = markets.reduce((s, m) => s + m.capacityIndex, 0) / (markets.length || 1);
 
-  // Fixed quadrant thresholds — drawn at economically meaningful values, NOT at
-  // sample means. This keeps a market in its own quadrant unless its own data
-  // crosses the threshold; sample-mean lines made markets near the median flip
-  // quadrants whenever any other market moved.
-  //
-  //   WAGE_THRESHOLD = 5% YoY — matches the Trade Bottleneck Analyzer's "tight"
-  //     threshold (TIGHTNESS_THRESHOLDS.red). Above 5% YoY = active bidding war.
-  //
-  //   AVAILABILITY_THRESHOLD = 30 — workers per monthly permit, wage-adjusted.
-  //     Roughly 1 worker per 3 days of permit pipeline; below this, trades
-  //     cannot keep pace with new starts. Operator-validated; revisit if data
-  //     suggests a better cutpoint.
-  const WAGE_THRESHOLD = 5;
-  const AVAILABILITY_THRESHOLD = 30;
-
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-      {/* Quadrant Chart */}
+      {/* Quadrant Chart — Trade Availability vs Homebuilder Demand */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-[#1E293B]">Trade Availability vs. Cost Pressure</h3>
+          <h3 className="text-sm font-semibold text-[#1E293B]">Trade Availability vs. Homebuilder Demand</h3>
           <p className="text-xs text-[#6B7280] mt-0.5">
-            Trade Availability = workers per permit, adjusted for wage pressure. Higher = more trades available per unit of demand.
+            X = skilled labor supply (workers per permit, wage-adjusted). Y = blended demand index (permits, employment, migration, income, unemployment). Top-right = best markets.
           </p>
         </div>
 
-        {/* Top row pills — positioned above top-left and top-right corners */}
+        {/* Top row pills — high demand quadrants */}
         <div className="flex items-center justify-between mb-3 px-2">
           <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-            Tight &amp; Expensive
+            Worst Markets · High demand, low trades
           </span>
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            Large but Costly
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            Best Markets · High demand, high trades
           </span>
         </div>
 
         <div className="flex items-center justify-center">
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={460}>
             <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
               <XAxis
@@ -112,16 +114,17 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                 dataKey="x"
                 name="Trade Availability"
                 tickFormatter={(v) => v.toFixed(0)}
-                label={{ value: "Trade Availability →", position: "insideBottom", offset: -10, style: { fontSize: 11, fill: "#6B7280" } }}
+                label={{ value: "Trade Availability (skilled labor supply) →", position: "insideBottom", offset: -10, style: { fontSize: 11, fill: "#6B7280" } }}
                 stroke="#9CA3AF"
                 tick={{ fontSize: 11 }}
               />
               <YAxis
                 type="number"
                 dataKey="y"
-                name="Wage Growth YoY"
-                tickFormatter={(v) => `${v}%`}
-                label={{ value: "Wage Growth YoY →", angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 11, fill: "#6B7280" } }}
+                name="Homebuilder Demand"
+                domain={[0, 100]}
+                tickFormatter={(v) => `${v}`}
+                label={{ value: "Homebuilder Demand (index 0-100) →", angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 11, fill: "#6B7280" } }}
                 stroke="#9CA3AF"
                 tick={{ fontSize: 11 }}
               />
@@ -133,11 +136,11 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                 label={{ value: `Availability ${AVAILABILITY_THRESHOLD}`, position: "insideTopRight", style: { fontSize: 10, fill: "#1E293B", fontWeight: 600 } }}
               />
               <ReferenceLine
-                y={WAGE_THRESHOLD}
+                y={DEMAND_THRESHOLD}
                 stroke="#1E293B"
                 strokeWidth={2}
                 ifOverflow="extendDomain"
-                label={{ value: `${WAGE_THRESHOLD}% YoY`, position: "insideRight", style: { fontSize: 10, fill: "#1E293B", fontWeight: 600 } }}
+                label={{ value: `Demand ${DEMAND_THRESHOLD}`, position: "insideRight", style: { fontSize: 10, fill: "#1E293B", fontWeight: 600 } }}
               />
               <Tooltip
                 content={({ payload }) => {
@@ -147,9 +150,10 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                     <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs">
                       <p className="font-semibold text-[#1E293B]">{d.name}</p>
                       <p className="text-[#6B7280]">Trade Availability: {d.x.toFixed(1)}</p>
-                      <p className="text-[#6B7280]">Trade Workers: {d.workers?.toLocaleString()}</p>
-                      <p className="text-[#6B7280]">Wage Growth: {d.y}%</p>
+                      <p className="text-[#6B7280]">Demand Index: {d.demandIndex}</p>
                       <p className="text-[#6B7280]">Capacity Index: {d.capacityIndex}</p>
+                      <p className="text-[#6B7280]">Trade Workers: {d.workers?.toLocaleString()}</p>
+                      <p className="text-[#6B7280]">Wage Growth: {d.wageYoy}%</p>
                     </div>
                   );
                 }}
@@ -158,25 +162,31 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                 {scatterData.map((entry, i) => (
                   <Cell
                     key={i}
-                    fill={getStatusColor(entry.status)}
-                    fillOpacity={0.8}
-                    r={Math.max(8, Math.min(20, (entry.z || 1000) / 500))}
+                    fill={getQuadrantColor(entry.x, entry.y)}
+                    fillOpacity={0.85}
+                    r={Math.max(8, Math.min(18, (entry.z || 1000) / 500))}
                   />
                 ))}
+                <LabelList
+                  dataKey="name"
+                  position="top"
+                  offset={6}
+                  style={{ fontSize: 10, fill: "#1E293B", fontWeight: 500, pointerEvents: "none" }}
+                />
               </Scatter>
             </ScatterChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Bottom row pills — positioned below bottom-left and bottom-right corners */}
+        {/* Bottom row pills — low demand quadrants */}
         <div className="flex items-center justify-between mt-3 px-2">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 border border-gray-300">
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
+            Low Opportunity · Low demand, low trades
+          </span>
           <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            Small but Affordable
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            Favorable For Capital Deployment
+            Untapped Capacity · Low demand, high trades
           </span>
         </div>
       </div>
