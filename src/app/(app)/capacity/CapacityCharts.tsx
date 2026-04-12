@@ -63,8 +63,21 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
     }));
 
   const avgCapacity = markets.reduce((s, m) => s + m.capacityIndex, 0) / (markets.length || 1);
-  const avgWage = markets.reduce((s, m) => s + m.avgWageYoy, 0) / (markets.length || 1);
-  const avgAvailability = markets.reduce((s, m) => s + m.tradeAvailability, 0) / (markets.length || 1);
+
+  // Fixed quadrant thresholds — drawn at economically meaningful values, NOT at
+  // sample means. This keeps a market in its own quadrant unless its own data
+  // crosses the threshold; sample-mean lines made markets near the median flip
+  // quadrants whenever any other market moved.
+  //
+  //   WAGE_THRESHOLD = 5% YoY — matches the Trade Bottleneck Analyzer's "tight"
+  //     threshold (TIGHTNESS_THRESHOLDS.red). Above 5% YoY = active bidding war.
+  //
+  //   AVAILABILITY_THRESHOLD = 30 — workers per monthly permit, wage-adjusted.
+  //     Roughly 1 worker per 3 days of permit pipeline; below this, trades
+  //     cannot keep pace with new starts. Operator-validated; revisit if data
+  //     suggests a better cutpoint.
+  const WAGE_THRESHOLD = 5;
+  const AVAILABILITY_THRESHOLD = 30;
 
   return (
     <div className="space-y-8">
@@ -112,8 +125,20 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                 stroke="#9CA3AF"
                 tick={{ fontSize: 11 }}
               />
-              <ReferenceLine x={avgAvailability} stroke="#D1D5DB" strokeDasharray="5 5" />
-              <ReferenceLine y={avgWage} stroke="#D1D5DB" strokeDasharray="5 5" />
+              <ReferenceLine
+                x={AVAILABILITY_THRESHOLD}
+                stroke="#1E293B"
+                strokeWidth={2}
+                ifOverflow="extendDomain"
+                label={{ value: `Availability ${AVAILABILITY_THRESHOLD}`, position: "insideTopRight", style: { fontSize: 10, fill: "#1E293B", fontWeight: 600 } }}
+              />
+              <ReferenceLine
+                y={WAGE_THRESHOLD}
+                stroke="#1E293B"
+                strokeWidth={2}
+                ifOverflow="extendDomain"
+                label={{ value: `${WAGE_THRESHOLD}% YoY`, position: "insideRight", style: { fontSize: 10, fill: "#1E293B", fontWeight: 600 } }}
+              />
               <Tooltip
                 content={({ payload }) => {
                   if (!payload?.length) return null;
@@ -161,11 +186,14 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
         <div className="mb-4">
           <h3 className="text-sm font-semibold text-[#1E293B]">Markets Ranked by Capacity Index</h3>
           <p className="text-xs text-[#6B7280] mt-0.5">
-            Higher score = more trade labor available. Bar color reflects wage pressure.
+            Higher score = more trade labor available. Bar color reflects wage pressure. Scroll within the chart to see all markets.
           </p>
         </div>
-        <div className="flex items-center justify-center">
-        <ResponsiveContainer width="100%" height={markets.length * 36 + 40}>
+        {/* Fixed-height scroll container — matches the scatter chart height (400px)
+            so the two visualizations sit balanced side-by-side. The inner chart
+            preserves its full bar count by setting its own height. */}
+        <div className="overflow-y-auto" style={{ height: 400 }}>
+        <ResponsiveContainer width="100%" height={markets.length * 28 + 40}>
           <BarChart
             data={rankedData}
             layout="vertical"
@@ -200,7 +228,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-        </div>
+        </div>{/* /scroll container */}
         <div className="flex items-center gap-4 mt-3 text-xs text-[#6B7280] border-t border-gray-100 pt-3">
           <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#16A34A]" /> Wage &lt;3%</span>
           <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#D97706]" /> Wage 3–5%</span>

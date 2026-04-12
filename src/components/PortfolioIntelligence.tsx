@@ -80,12 +80,12 @@ export default function PortfolioIntelligence() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Top Picks */}
-        <div className="bg-white rounded-xl border border-green-200 overflow-hidden">
-          <div className="px-5 py-3 bg-green-50 border-b border-green-200">
+        {/* Top Picks — fixed-height scroll keeps both cards balanced */}
+        <div className="bg-white rounded-xl border border-green-200 overflow-hidden flex flex-col" style={{ height: 520 }}>
+          <div className="px-5 py-3 bg-green-50 border-b border-green-200 flex-shrink-0">
             <h3 className="text-sm font-semibold text-green-800">Top Markets for Capital Deployment</h3>
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 overflow-y-auto flex-1">
             {data.topPicks.slice(0, 10).map((pick, i) => (
               <div key={i} className="px-5 py-4">
                 <div className="flex items-center justify-between mb-1">
@@ -99,12 +99,12 @@ export default function PortfolioIntelligence() {
           </div>
         </div>
 
-        {/* Watch List */}
-        <div className="bg-white rounded-xl border border-red-200 overflow-hidden">
-          <div className="px-5 py-3 bg-red-50 border-b border-red-200">
+        {/* Watch List — fixed-height scroll keeps both cards balanced */}
+        <div className="bg-white rounded-xl border border-red-200 overflow-hidden flex flex-col" style={{ height: 520 }}>
+          <div className="px-5 py-3 bg-red-50 border-b border-red-200 flex-shrink-0">
             <h3 className="text-sm font-semibold text-red-800">Markets to Watch — Capacity Risk</h3>
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 overflow-y-auto flex-1">
             {data.watchList.slice(0, 10).map((item, i) => (
               <div key={i} className="px-5 py-4">
                 <span className="font-semibold text-[#1E293B] text-sm">{item.market}</span>

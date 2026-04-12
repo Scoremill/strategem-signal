@@ -57,6 +57,7 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
     if (!mapContainer.current) return;
@@ -180,10 +181,24 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
         </div>
       </div>
 
-      {/* Top Picks panel */}
-      <div className="absolute top-4 right-4 z-10 w-72">
-        <TopPicksPanel />
-      </div>
+      {/* Toggle button for the floating panel */}
+      <button
+        onClick={() => setPanelOpen((v) => !v)}
+        aria-label={panelOpen ? "Close intelligence panel" : "Open intelligence panel"}
+        className={`absolute top-4 right-4 z-30 inline-flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg border transition-colors ${
+          panelOpen
+            ? "bg-[#F97316] text-white border-[#EA580C] hover:bg-[#EA580C]"
+            : "bg-white text-[#1E293B] border-gray-200 hover:bg-gray-50"
+        }`}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        </svg>
+        <span className="text-xs font-semibold">{panelOpen ? "Hide" : "Top Picks"}</span>
+      </button>
+
+      {/* Floating intelligence panel — opens over the map, closes to give the map full screen */}
+      <TopPicksPanel isOpen={panelOpen} onClose={() => setPanelOpen(false)} />
 
       <div ref={mapContainer} className="w-full h-full" />
     </div>

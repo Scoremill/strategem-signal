@@ -152,7 +152,14 @@ export default async function DashboardPage() {
       {/* Market table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[#1E293B]">Markets by Demand-Capacity Ratio</h2>
+          <div>
+            <h2 className="text-sm font-semibold text-[#1E293B]">Markets by Demand-Capacity Ratio</h2>
+            {maxScoreDate && (
+              <p className="text-[11px] text-[#6B7280] mt-0.5">
+                Updated {new Date(maxScoreDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+              </p>
+            )}
+          </div>
           <span className="text-xs text-[#6B7280]">Click column headers to sort</span>
         </div>
         <DashboardTable rows={rows} />

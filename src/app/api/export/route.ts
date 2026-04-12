@@ -36,17 +36,33 @@ export async function GET() {
       )`
     );
 
-  // Get latest employment
+  // Get latest nonfarm employment per market
   const employment = await db
     .select({
       geographyId: employmentData.geographyId,
       totalNonfarm: employmentData.totalNonfarm,
-      unemploymentRate: employmentData.unemploymentRate,
     })
     .from(employmentData)
     .where(
       sql`(${employmentData.geographyId}, ${employmentData.periodDate}) IN (
         SELECT geography_id, MAX(period_date) FROM employment_data GROUP BY geography_id
+      )`
+    );
+
+  // Get latest NON-NULL unemployment rate per market — separately, because
+  // BLS LAUS publishes UR ~1 month after FRED publishes nonfarm employment for
+  // the same period, so the newest row often has a populated nonfarm but a
+  // null UR. Pulling them separately ensures the CSV always shows the most
+  // recent UR available, not just whatever happens to be on the newest row.
+  const unemployment = await db
+    .select({
+      geographyId: employmentData.geographyId,
+      unemploymentRate: employmentData.unemploymentRate,
+    })
+    .from(employmentData)
+    .where(
+      sql`${employmentData.unemploymentRate} IS NOT NULL AND (${employmentData.geographyId}, ${employmentData.periodDate}) IN (
+        SELECT geography_id, MAX(period_date) FROM employment_data WHERE unemployment_rate IS NOT NULL GROUP BY geography_id
       )`
     );
 
@@ -68,6 +84,7 @@ export async function GET() {
   const scoreMap = new Map(scores.map((s) => [s.geographyId, s]));
   const permitMap = new Map(permits.map((p) => [p.geographyId, p]));
   const empMap = new Map(employment.map((e) => [e.geographyId, e]));
+  const urMap = new Map(unemployment.map((u) => [u.geographyId, u.unemploymentRate]));
   const tradeMap = new Map(tradeCap.map((t) => [t.geographyId, t]));
 
   // Build CSV
@@ -109,7 +126,7 @@ export async function GET() {
       p?.totalPermits ?? "",
       p?.singleFamily ?? "",
       e?.totalNonfarm ?? "",
-      e?.unemploymentRate ?? "",
+      urMap.get(m.id) ?? "",
       t ? Number(t.totalWorkers) : "",
       t ? Number(t.avgWage) : "",
       t ? Number(t.avgWageYoy) : "",

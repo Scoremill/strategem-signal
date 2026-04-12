@@ -134,7 +134,14 @@ export default async function CapacityPage() {
       {/* Detailed Data Table */}
       <div className="mt-8 bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[#1E293B]">Detailed Trade Data</h2>
+          <div>
+            <h2 className="text-sm font-semibold text-[#1E293B]">Detailed Trade Data</h2>
+            {maxDate && (
+              <p className="text-[11px] text-[#6B7280] mt-0.5">
+                Updated {new Date(maxDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+              </p>
+            )}
+          </div>
           <span className="text-xs text-[#6B7280]">Click column headers to sort</span>
         </div>
         <CapacityTable rows={tableRows} />
