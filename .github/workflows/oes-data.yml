@@ -1,0 +1,33 @@
+name: Annual OES Occupation Data Fetch
+
+# BLS OEWS releases new occupation-level estimates each spring (typically
+# late April for the prior May reference date). We fire annually on April 15
+# at 11:00 UTC (6:00 AM CT) so the new vintage is captured the day after BLS
+# typically publishes. The 2026-04-13 entry is a one-time bootstrap to land
+# the initial backfill the morning after this workflow is committed.
+on:
+  schedule:
+    # Annual: April 15 at 11:00 UTC (6:00 AM CT)
+    - cron: '0 11 15 4 *'
+    # Bootstrap: April 13 at 11:00 UTC (6:00 AM CT) — one-time initial backfill
+    - cron: '0 11 13 4 *'
+  workflow_dispatch: # Manual trigger button in GitHub Actions UI
+
+jobs:
+  fetch-oes-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch OES occupation data (BLS OEWS)
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.APP_URL }}/api/cron/oes" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "OES fetch response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::OES fetch failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
