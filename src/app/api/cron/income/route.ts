@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { fetchLogs } from "@/lib/db/schema";
-import { runOesPipeline } from "@/lib/pipelines/oes-pipeline";
+import { runIncomePipeline } from "@/lib/pipelines/income-pipeline";
 import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
-// Vercel Hobby caps Serverless Functions at 300s. The OES backfill across all
-// 52 markets exceeds that, so this endpoint is intentionally a "trigger and
-// drop" — it processes whatever it can within 300s. For full backfills run
-// `node --env-file=.env.local --import tsx scripts/run-oes.ts` locally.
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const auth = request.headers.get("authorization");
@@ -24,12 +20,12 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    const result = await runOesPipeline();
+    const result = await runIncomePipeline();
     const durationMs = Date.now() - startTime;
 
     await db.insert(fetchLogs).values({
       id: randomUUID(),
-      pipeline: "oes",
+      pipeline: "income",
       recordsFetched: result.recordsInserted,
       recordsNew: result.recordsInserted,
       errors: result.errors.length > 0 ? JSON.stringify(result.errors) : null,
@@ -45,7 +41,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[cron/oes] error:", msg);
+    console.error("[cron/income] error:", msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

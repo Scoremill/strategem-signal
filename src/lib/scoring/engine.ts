@@ -16,6 +16,7 @@ import {
   permitData,
   employmentData,
   migrationData,
+  incomeData,
   tradeCapacityData,
   demandScores,
   capacityScores,
@@ -26,17 +27,19 @@ import { randomUUID } from "crypto";
 
 // ─── Default Weights ─────────────────────────────────────────────
 const DEMAND_WEIGHTS = {
-  permits: 0.35,
-  employment: 0.30,
-  population: 0.20,
-  unemployment: 0.15, // inverse — low unemployment = high demand signal
+  permits: 0.30,
+  employment: 0.25,
+  population: 0.15,
+  income: 0.15,        // ACS B19013 median household income — purchasing power proxy
+  unemployment: 0.15,  // inverse — low unemployment = high demand signal
 };
 
 const CAPACITY_WEIGHTS = {
   tradeEmployment: 0.25,
   wageAcceleration: 0.25, // INVERSE — high wage growth = low capacity
-  establishments: 0.20,
-  permitsPerWorker: 0.30, // INVERSE — high ratio = capacity stress
+  establishments: 0.15,
+  permitsPerWorker: 0.20, // INVERSE — high ratio = capacity stress
+  dollarsPerWorker: 0.15, // INVERSE — high quarterly wage cost per worker = expensive/stressed labor pool
 };
 
 // Permit-to-Starts conversion factors by state group
@@ -64,6 +67,7 @@ interface MarketMetrics {
   latestEmployment: number | null;
   employmentGrowthYoy: number | null;
   population: number | null;
+  medianHouseholdIncome: number | null;
   unemploymentRate: number | null;
   // Capacity raw values
   tradeWorkers: number | null;
@@ -71,6 +75,10 @@ interface MarketMetrics {
   wageGrowthYoy: number | null;
   establishments: number | null;
   permitsPerWorker: number | null;
+  // Quarterly wages aggregate (across all NAICS 238x). Used to derive
+  // dollars-per-worker, the absolute cost-per-worker proxy from QCEW.
+  totalQuarterlyWages: number | null;
+  dollarsPerWorker: number | null;
 }
 
 interface ScoredMarket {
@@ -80,6 +88,7 @@ interface ScoredMarket {
   permitScore: number;
   employmentScore: number;
   populationScore: number;
+  incomeScore: number;
   unemploymentScore: number;
   // Demand index
   demandIndex: number;
@@ -88,6 +97,7 @@ interface ScoredMarket {
   wageAccelerationScore: number;
   establishmentScore: number;
   permitsPerWorkerScore: number;
+  dollarsPerWorkerScore: number;
   // Capacity index
   capacityIndex: number;
   // Ratio
@@ -191,6 +201,14 @@ async function collectMarketMetrics(): Promise<MarketMetrics[]> {
       .orderBy(desc(migrationData.year))
       .limit(1);
 
+    // Latest median household income (ACS)
+    const [latestIncome] = await db
+      .select()
+      .from(incomeData)
+      .where(eq(incomeData.geographyId, market.id))
+      .orderBy(desc(incomeData.year))
+      .limit(1);
+
     // Latest trade capacity (aggregate across NAICS codes)
     const [tradeCap] = await db
       .select({
@@ -198,6 +216,7 @@ async function collectMarketMetrics(): Promise<MarketMetrics[]> {
         avgWage: sql<number>`ROUND(AVG(CAST(avg_weekly_wage AS numeric)))`,
         avgWageYoy: sql<number>`ROUND(AVG(CAST(wage_yoy_change_pct AS numeric)), 1)`,
         totalEstabs: sql<number>`SUM(establishment_count)`,
+        totalQuarterlyWages: sql<number>`SUM(total_quarterly_wages)`,
       })
       .from(tradeCapacityData)
       .where(
@@ -211,6 +230,9 @@ async function collectMarketMetrics(): Promise<MarketMetrics[]> {
 
     const totalWorkers = Number(tradeCap?.totalWorkers) || null;
     const latestPermits = latestPermit?.totalPermits ?? null;
+    const totalQuarterlyWages = Number(tradeCap?.totalQuarterlyWages) || null;
+    const dollarsPerWorker =
+      totalQuarterlyWages && totalWorkers ? totalQuarterlyWages / totalWorkers : null;
 
     // Compute YoY growth rates
     const permitGrowthYoy =
@@ -232,6 +254,7 @@ async function collectMarketMetrics(): Promise<MarketMetrics[]> {
       latestEmployment: latestEmp?.totalNonfarm ?? null,
       employmentGrowthYoy,
       population: latestPop?.totalPopulation ?? null,
+      medianHouseholdIncome: latestIncome?.medianHouseholdIncome ?? null,
       unemploymentRate: latestEmp?.unemploymentRate ? parseFloat(String(latestEmp.unemploymentRate)) : null,
       tradeWorkers: totalWorkers,
       avgWeeklyWage: Number(tradeCap?.avgWage) || null,
@@ -239,6 +262,8 @@ async function collectMarketMetrics(): Promise<MarketMetrics[]> {
       establishments: Number(tradeCap?.totalEstabs) || null,
       permitsPerWorker:
         latestPermits && totalWorkers ? latestPermits / totalWorkers : null,
+      totalQuarterlyWages,
+      dollarsPerWorker,
     });
   }
 
@@ -254,12 +279,14 @@ function scoreMarkets(metrics: MarketMetrics[]): ScoredMarket[] {
   const empVals = metrics.map((m) => m.latestEmployment);
   const empGrowthVals = metrics.map((m) => m.employmentGrowthYoy);
   const popVals = metrics.map((m) => m.population);
+  const incomeVals = metrics.map((m) => m.medianHouseholdIncome);
   const urVals = metrics.map((m) => m.unemploymentRate);
 
   const tradeEmpVals = metrics.map((m) => m.tradeWorkers);
   const wageGrowthVals = metrics.map((m) => m.wageGrowthYoy);
   const estabVals = metrics.map((m) => m.establishments);
   const ppwVals = metrics.map((m) => m.permitsPerWorker);
+  const dpwVals = metrics.map((m) => m.dollarsPerWorker);
 
   // Demand percentiles (higher = more demand)
   const permitPctls = percentileRank(permitVals);
@@ -267,6 +294,7 @@ function scoreMarkets(metrics: MarketMetrics[]): ScoredMarket[] {
   const empPctls = percentileRank(empVals);
   const empGrowthPctls = percentileRank(empGrowthVals);
   const popPctls = percentileRank(popVals);
+  const incomePctls = percentileRank(incomeVals); // Higher household income = stronger purchasing power = higher demand
   const urPctls = inversePercentileRank(urVals); // Low unemployment = high demand
 
   // Capacity percentiles
@@ -274,32 +302,38 @@ function scoreMarkets(metrics: MarketMetrics[]): ScoredMarket[] {
   const wageGrowthPctls = inversePercentileRank(wageGrowthVals); // High wages = LOW capacity
   const estabPctls = percentileRank(estabVals); // More firms = more capacity
   const ppwPctls = inversePercentileRank(ppwVals); // High permits/worker = LOW capacity
+  const dpwPctls = inversePercentileRank(dpwVals); // High $/worker = expensive labor = LOW capacity
 
   return metrics.map((m, i) => {
     // Demand: blend permit volume/growth, employment volume/growth, population, unemployment
     const permitScore = Math.round((permitPctls[i] + permitGrowthPctls[i]) / 2);
     const employmentScore = Math.round((empPctls[i] + empGrowthPctls[i]) / 2);
     const populationScore = popPctls[i];
+    const incomeScore = incomePctls[i];
     const unemploymentScore = urPctls[i];
 
     const demandIndex = Math.round(
       permitScore * DEMAND_WEIGHTS.permits +
         employmentScore * DEMAND_WEIGHTS.employment +
         populationScore * DEMAND_WEIGHTS.population +
+        incomeScore * DEMAND_WEIGHTS.income +
         unemploymentScore * DEMAND_WEIGHTS.unemployment
     );
 
-    // Capacity: trade employment, wage acceleration (inverse), establishments, permits-per-worker (inverse)
+    // Capacity: trade employment, wage acceleration (inverse), establishments,
+    // permits-per-worker (inverse), dollars-per-worker (inverse)
     const tradeEmploymentScore = tradeEmpPctls[i];
     const wageAccelerationScore = wageGrowthPctls[i];
     const establishmentScore = estabPctls[i];
     const permitsPerWorkerScore = ppwPctls[i];
+    const dollarsPerWorkerScore = dpwPctls[i];
 
     const capacityIndex = Math.round(
       tradeEmploymentScore * CAPACITY_WEIGHTS.tradeEmployment +
         wageAccelerationScore * CAPACITY_WEIGHTS.wageAcceleration +
         establishmentScore * CAPACITY_WEIGHTS.establishments +
-        permitsPerWorkerScore * CAPACITY_WEIGHTS.permitsPerWorker
+        permitsPerWorkerScore * CAPACITY_WEIGHTS.permitsPerWorker +
+        dollarsPerWorkerScore * CAPACITY_WEIGHTS.dollarsPerWorker
     );
 
     // Ratio
@@ -337,12 +371,14 @@ function scoreMarkets(metrics: MarketMetrics[]): ScoredMarket[] {
       permitScore,
       employmentScore,
       populationScore,
+      incomeScore,
       unemploymentScore,
       demandIndex,
       tradeEmploymentScore,
       wageAccelerationScore,
       establishmentScore,
       permitsPerWorkerScore,
+      dollarsPerWorkerScore,
       capacityIndex,
       demandCapacityRatio,
       status,
@@ -378,7 +414,8 @@ async function persistScores(scored: ScoredMarket[], scoreDate: string): Promise
         permitScore: String(s.permitScore),
         employmentScore: String(s.employmentScore),
         migrationScore: String(s.populationScore),
-        incomeScore: String(s.unemploymentScore),
+        incomeScore: String(s.incomeScore),
+        startsScore: String(s.unemploymentScore),
         demandIndex: String(s.demandIndex),
       })
       .onConflictDoNothing();
@@ -394,6 +431,7 @@ async function persistScores(scored: ScoredMarket[], scoreDate: string): Promise
         wageAccelerationScore: String(s.wageAccelerationScore),
         establishmentScore: String(s.establishmentScore),
         permitsPerWorkerScore: String(s.permitsPerWorkerScore),
+        dollarsPerWorkerScore: String(s.dollarsPerWorkerScore),
         capacityIndex: String(s.capacityIndex),
       })
       .onConflictDoNothing();
