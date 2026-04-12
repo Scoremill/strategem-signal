@@ -78,23 +78,15 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
           </p>
         </div>
 
-        {/* Quadrant pill legend — outside the chart */}
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          <span className="inline-flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+        {/* Top row pills — positioned above top-left and top-right corners */}
+        <div className="flex items-center justify-between mb-3 px-2">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-            Top Left: Tight & Expensive
+            Tight &amp; Expensive
           </span>
-          <span className="inline-flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            Top Right: Large but Costly
-          </span>
-          <span className="inline-flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            Bottom Left: Small but Affordable
-          </span>
-          <span className="inline-flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            Bottom Right: Favorable For Capital Deployment
+            Large but Costly
           </span>
         </div>
 
@@ -149,6 +141,18 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
               </Scatter>
             </ScatterChart>
           </ResponsiveContainer>
+        </div>
+
+        {/* Bottom row pills — positioned below bottom-left and bottom-right corners */}
+        <div className="flex items-center justify-between mt-3 px-2">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            Small but Affordable
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            Favorable For Capital Deployment
+          </span>
         </div>
       </div>
 
