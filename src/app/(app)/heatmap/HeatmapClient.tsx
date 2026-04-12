@@ -172,20 +172,41 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
 
   return (
     <div className="relative h-full">
-      {/* Metric toggle */}
+      {/* Metric toggle with tooltips */}
       <div className="absolute top-4 left-4 z-10 bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
-        {(["ratio", "demand", "capacity"] as MetricView[]).map((m) => (
-          <button
-            key={m}
-            onClick={() => setMetric(m)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-              metric === m
-                ? "bg-[#F97316] text-white"
-                : "text-[#4B5563] hover:bg-gray-100"
-            }`}
-          >
-            {getLabel(m)}
-          </button>
+        {([
+          {
+            key: "ratio" as MetricView,
+            label: "D/C Ratio",
+            tooltip: "Demand-Capacity Ratio: Demand Index divided by Capacity Index. Above 1.15 means demand exceeds trade labor capacity — expect longer cycle times and cost pressure. Below 0.85 means capacity is available for builder expansion with trade pricing leverage.",
+          },
+          {
+            key: "demand" as MetricView,
+            label: "Demand Index",
+            tooltip: "Demand Index (0–100): A composite score measuring housing demand strength from building permits, employment growth, population, and unemployment rate. Higher score = stronger demand for new construction in that market.",
+          },
+          {
+            key: "capacity" as MetricView,
+            label: "Capacity Index",
+            tooltip: "Capacity Index (0–100): A composite score measuring trade labor availability from construction workforce size, wage acceleration (inverse — rising wages signal tightness), and contractor establishment counts. Higher score = more trade capacity available. A market can have strong demand (green) but low capacity (red) — that mismatch is the key risk signal.",
+          },
+        ]).map((m) => (
+          <div key={m.key} className="relative group">
+            <button
+              onClick={() => setMetric(m.key)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                metric === m.key
+                  ? "bg-[#F97316] text-white"
+                  : "text-[#4B5563] hover:bg-gray-100"
+              }`}
+            >
+              {m.label}
+            </button>
+            <div className="absolute top-full left-0 mt-2 w-72 bg-[#1E293B] text-white text-xs leading-relaxed rounded-lg p-3 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+              {m.tooltip}
+              <div className="absolute -top-1 left-4 w-2 h-2 bg-[#1E293B] rotate-45" />
+            </div>
+          </div>
         ))}
       </div>
 

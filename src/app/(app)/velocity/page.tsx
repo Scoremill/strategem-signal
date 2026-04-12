@@ -1,107 +1,91 @@
 import { db } from "@/lib/db";
-import { geographies, demandCapacityScores } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import {
+  geographies,
+  demandCapacityScores,
+  permitData,
+  employmentData,
+  tradeCapacityData,
+} from "@/lib/db/schema";
+import { eq, sql, desc } from "drizzle-orm";
+import VelocityClient from "./VelocityClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function VelocityPage() {
-  const latestScoreDate = await db
-    .select({ maxDate: sql<string>`MAX(score_date)` })
-    .from(demandCapacityScores);
-  const maxScoreDate = latestScoreDate[0]?.maxDate;
+  const markets = await db.select().from(geographies).where(eq(geographies.isActive, true)).orderBy(geographies.shortName);
 
-  const scores = maxScoreDate
-    ? await db.select().from(demandCapacityScores).where(eq(demandCapacityScores.scoreDate, maxScoreDate))
+  const latestScoreDate = await db.select({ maxDate: sql<string>`MAX(score_date)` }).from(demandCapacityScores);
+  const scores = latestScoreDate[0]?.maxDate
+    ? await db.select().from(demandCapacityScores).where(eq(demandCapacityScores.scoreDate, latestScoreDate[0].maxDate))
     : [];
 
-  const markets = await db.select().from(geographies).orderBy(geographies.shortName);
+  const latestPermits = await db
+    .select({ geographyId: permitData.geographyId, totalPermits: permitData.totalPermits })
+    .from(permitData)
+    .where(sql`(${permitData.geographyId}, ${permitData.periodDate}) IN (SELECT geography_id, MAX(period_date) FROM permit_data GROUP BY geography_id)`);
+
+  const latestEmp = await db
+    .select({ geographyId: employmentData.geographyId, totalNonfarm: employmentData.totalNonfarm, unemploymentRate: employmentData.unemploymentRate })
+    .from(employmentData)
+    .where(sql`(${employmentData.geographyId}, ${employmentData.periodDate}) IN (SELECT geography_id, MAX(period_date) FROM employment_data GROUP BY geography_id)`);
+
+  const latestUR = await db
+    .select({ geographyId: employmentData.geographyId, unemploymentRate: employmentData.unemploymentRate })
+    .from(employmentData)
+    .where(sql`${employmentData.unemploymentRate} IS NOT NULL AND (${employmentData.geographyId}, ${employmentData.periodDate}) IN (SELECT geography_id, MAX(period_date) FROM employment_data WHERE unemployment_rate IS NOT NULL GROUP BY geography_id)`);
+
+  const tradeCap = await db
+    .select({
+      geographyId: tradeCapacityData.geographyId,
+      totalWorkers: sql<number>`SUM(avg_monthly_employment)`,
+      avgWageYoy: sql<number>`ROUND(AVG(CAST(wage_yoy_change_pct AS numeric)), 1)`,
+      totalEstabs: sql<number>`SUM(establishment_count)`,
+    })
+    .from(tradeCapacityData)
+    .where(sql`${tradeCapacityData.periodDate} = (SELECT MAX(period_date) FROM trade_capacity_data)`)
+    .groupBy(tradeCapacityData.geographyId);
+
   const scoreMap = new Map(scores.map((s) => [s.geographyId, s]));
+  const permitMap = new Map(latestPermits.map((p) => [p.geographyId, p]));
+  const empMap = new Map(latestEmp.map((e) => [e.geographyId, e]));
+  const urMap = new Map(latestUR.map((u) => [u.geographyId, u.unemploymentRate]));
+  const tradeMap = new Map(tradeCap.map((t) => [t.geographyId, t]));
 
-  // Sort by ratio — most constrained first (these are "accelerating demand")
-  const sorted = [...markets]
-    .map((m) => ({ ...m, score: scoreMap.get(m.id) }))
-    .filter((m) => m.score)
-    .sort((a, b) => {
-      const ra = parseFloat(String(a.score!.demandCapacityRatio));
-      const rb = parseFloat(String(b.score!.demandCapacityRatio));
-      return rb - ra;
+  const marketData = markets
+    .filter((m) => scoreMap.has(m.id))
+    .map((m) => {
+      const s = scoreMap.get(m.id)!;
+      const p = permitMap.get(m.id);
+      const e = empMap.get(m.id);
+      const ur = urMap.get(m.id);
+      const t = tradeMap.get(m.id);
+
+      return {
+        id: m.id,
+        shortName: m.shortName,
+        state: m.state,
+        demandIndex: parseFloat(String(s.demandIndex)),
+        capacityIndex: parseFloat(String(s.capacityIndex)),
+        ratio: parseFloat(String(s.demandCapacityRatio)),
+        status: s.status,
+        permits: p?.totalPermits ?? null,
+        employment: e?.totalNonfarm ?? null,
+        unemploymentRate: ur ? parseFloat(String(ur)) : null,
+        tradeWorkers: t ? Number(t.totalWorkers) : null,
+        wageGrowthYoy: t ? Number(t.avgWageYoy) : null,
+        establishments: t ? Number(t.totalEstabs) : null,
+      };
     });
-
-  const deteriorating = sorted.filter((m) => parseFloat(String(m.score!.demandCapacityRatio)) > 1.0);
-  const improving = sorted.filter((m) => parseFloat(String(m.score!.demandCapacityRatio)) <= 1.0).reverse();
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-[#1E293B]">Velocity</h1>
-      <p className="text-sm text-[#6B7280] mt-1">
-        Markets where demand is outpacing capacity vs. markets with available capacity
-      </p>
-
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Deteriorating */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-red-200 bg-red-50">
-            <h2 className="text-sm font-semibold text-red-800">
-              Demand Outpacing Capacity ({deteriorating.length})
-            </h2>
-            <p className="text-xs text-red-600 mt-0.5">Ratio &gt; 1.0 — expect trade cost pressure</p>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {deteriorating.map((m) => {
-              const ratio = parseFloat(String(m.score!.demandCapacityRatio));
-              return (
-                <div key={m.id} className="px-5 py-3 flex items-center justify-between">
-                  <div>
-                    <span className="font-medium text-[#1E293B]">{m.shortName}</span>
-                    <span className="text-xs text-[#6B7280] ml-2">{m.state}</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs text-[#6B7280]">
-                      D:{parseFloat(String(m.score!.demandIndex)).toFixed(0)} C:{parseFloat(String(m.score!.capacityIndex)).toFixed(0)}
-                    </span>
-                    <span className="text-sm font-bold text-red-700">{ratio.toFixed(2)}</span>
-                  </div>
-                </div>
-              );
-            })}
-            {deteriorating.length === 0 && (
-              <div className="px-5 py-8 text-center text-[#6B7280]">No markets in this category</div>
-            )}
-          </div>
-        </div>
-
-        {/* Improving */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-green-200 bg-green-50">
-            <h2 className="text-sm font-semibold text-green-800">
-              Capacity Available ({improving.length})
-            </h2>
-            <p className="text-xs text-green-600 mt-0.5">Ratio &le; 1.0 — favorable for expansion</p>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {improving.map((m) => {
-              const ratio = parseFloat(String(m.score!.demandCapacityRatio));
-              return (
-                <div key={m.id} className="px-5 py-3 flex items-center justify-between">
-                  <div>
-                    <span className="font-medium text-[#1E293B]">{m.shortName}</span>
-                    <span className="text-xs text-[#6B7280] ml-2">{m.state}</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs text-[#6B7280]">
-                      D:{parseFloat(String(m.score!.demandIndex)).toFixed(0)} C:{parseFloat(String(m.score!.capacityIndex)).toFixed(0)}
-                    </span>
-                    <span className="text-sm font-bold text-green-700">{ratio.toFixed(2)}</span>
-                  </div>
-                </div>
-              );
-            })}
-            {improving.length === 0 && (
-              <div className="px-5 py-8 text-center text-[#6B7280]">No markets in this category</div>
-            )}
-          </div>
-        </div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-[#1E293B]">Market Velocity & Comparison</h1>
+        <p className="text-sm text-[#6B7280] mt-1">
+          Demand-capacity gap analysis and side-by-side market comparison
+        </p>
       </div>
+      <VelocityClient markets={marketData} />
     </div>
   );
 }

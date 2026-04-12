@@ -35,3 +35,7 @@ The Demand-Capacity Ratio is the central analytical output. It divides a blended
 ## Neon Project
 - Project ID: fancy-mountain-71820151
 - Database: neondb
+
+## Debugging Standard
+
+**Never guess at issues.** When Drew reports a bug or problem, reproduce and diagnose it with real testing (curl, logs, database queries) BEFORE attempting a fix. Do not hypothesize causes and push speculative fixes. Test on production, read the actual error, trace the actual data flow. Three failed guesses wastes more time than one proper investigation.
