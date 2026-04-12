@@ -46,47 +46,73 @@ export interface FeasibilityResult {
 
 /**
  * Compute quantitative feasibility metrics (no AI required).
+ *
+ * Methodology:
+ * - Workers per home per month: ~30 (industry rule for SF construction)
+ * - Market demand already commits workers to existing permits
+ * - Surplus capacity = total workers - workers already committed
+ * - Labor absorption = your needs / surplus
  */
 export function computeFeasibility(input: FeasibilityInput): Omit<FeasibilityResult, "summary" | "risks" | "recommendations"> {
+  const WORKERS_PER_START = 30;
+
   // Market share: your starts as % of estimated total market starts
   const marketShare = input.estMonthlyStarts > 0
     ? (input.startsPerMonth / input.estMonthlyStarts) * 100
     : 0;
 
-  // Trade workers needed — rough industry rule: ~30 trade workers per home per month
-  // at standard cycle (varies by product type; this is SF mid-market assumption)
-  const tradeWorkersNeeded = Math.round(input.startsPerMonth * 30);
+  // Trade workers your community needs
+  const tradeWorkersNeeded = Math.round(input.startsPerMonth * WORKERS_PER_START);
 
-  // Labor absorption: workers needed vs. available (approximated from tradeAvailability × permits)
-  const availableWorkers = Math.round(input.tradeAvailability * input.startsPerMonth);
-  const laborAbsorption = availableWorkers > 0
-    ? (tradeWorkersNeeded / availableWorkers) * 100
+  // Workers already committed to existing market demand
+  const workersAlreadyCommitted = Math.round(input.estMonthlyStarts * WORKERS_PER_START);
+
+  // Surplus workers = total trade workforce minus workers committed to current demand
+  // This is the actual pool available for NEW work (including yours).
+  // If negative, the market is already over-committed — absorption should max at 100%.
+  const surplusWorkers = Math.max(0, input.tradeWorkers - workersAlreadyCommitted);
+
+  // Labor absorption: % of surplus capacity your community would consume
+  const laborAbsorption = surplusWorkers > 0
+    ? Math.min(100, (tradeWorkersNeeded / surplusWorkers) * 100)
     : 100;
 
-  // Cycle time risk — markets at higher D/C ratio stretch cycle times more
-  // Empirical: every 0.1 above 1.0 adds ~4% to cycle time in constrained markets
+  // Cycle time risk — markets at higher D/C ratio stretch cycle times
+  // Empirical: every 0.1 above 1.0 adds ~4% to cycle time
   let cycleTimeRiskFactor = 1.0;
   if (input.demandCapacityRatio > 1.0) {
     cycleTimeRiskFactor = 1.0 + ((input.demandCapacityRatio - 1.0) * 0.4);
   }
 
-  // Cost escalation — function of wage growth compounded over absorption period
   const absorptionMonths = Math.ceil(input.totalLots / input.startsPerMonth);
-  const absorptionYears = absorptionMonths / 12;
-  // Expected cost escalation = current wage growth rate × years, but dampened by labor absorption
-  const costEscalationEstimate = input.wageGrowthYoy * absorptionYears * (1 + (laborAbsorption / 100) * 0.5);
+
+  // Cost escalation — the current wage growth rate IS the annual escalation.
+  // Amplify modestly if the community represents meaningful market share
+  // (builder's own demand pressure pushes wages up further).
+  // If market share < 2%, no amplification. Above 2%, add a small pressure factor.
+  const shareAmplifier = marketShare > 2 ? 1.0 + (marketShare / 100) : 1.0;
+  const costEscalationEstimate = input.wageGrowthYoy * shareAmplifier;
 
   // Go/no-go logic
   let goNoGo: "green" | "yellow" | "red";
-  if (input.demandCapacityRatio > 1.5 || laborAbsorption > 80 || input.wageGrowthYoy > 7) {
+  if (
+    input.demandCapacityRatio > 1.5 ||
+    laborAbsorption > 40 ||
+    input.wageGrowthYoy > 7 ||
+    marketShare > 15
+  ) {
     goNoGo = "red";
-  } else if (input.demandCapacityRatio > 1.15 || laborAbsorption > 50 || input.wageGrowthYoy > 5) {
+  } else if (
+    input.demandCapacityRatio > 1.15 ||
+    laborAbsorption > 20 ||
+    input.wageGrowthYoy > 5 ||
+    marketShare > 8
+  ) {
     goNoGo = "yellow";
   } else {
     goNoGo = "green";
   }
 
-  // Confidence: higher when input data is complete
   const confidence: "high" | "medium" | "low" =
     input.tradeWorkers > 0 && input.wageGrowthYoy !== null ? "high" : "medium";
 
