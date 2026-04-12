@@ -4,7 +4,7 @@
  */
 import { db } from "@/lib/db";
 import { geographies, permitData, employmentData, migrationData } from "@/lib/db/schema";
-import { fetchSeries, MSA_SERIES } from "./fred-client";
+import { fetchSeries, fetchAggregatedCountyPermits, MSA_SERIES, MSA_DEMAND_COUNTY_FALLBACK } from "./fred-client";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -32,11 +32,38 @@ async function fetchPermits(
   cbsaFips: string,
   startDate: string
 ): Promise<{ inserted: number; errors: string[] }> {
-  const series = MSA_SERIES[cbsaFips];
-  if (!series) return { inserted: 0, errors: [`No FRED series for CBSA ${cbsaFips}`] };
-
   const errors: string[] = [];
   let inserted = 0;
+
+  // County aggregation fallback for markets without MSA-level permits
+  const fallback = MSA_DEMAND_COUNTY_FALLBACK[cbsaFips];
+  if (fallback) {
+    try {
+      const totalObs = await fetchAggregatedCountyPermits(fallback.counties, startDate);
+      for (const obs of totalObs) {
+        const total = Math.round(parseFloat(obs.value));
+        await db
+          .insert(permitData)
+          .values({
+            id: randomUUID(),
+            geographyId: geoId,
+            periodDate: obs.date,
+            totalPermits: total,
+            singleFamily: null, // county data doesn't split
+            multiFamily: null,
+            source: "fred_county_agg",
+          })
+          .onConflictDoNothing();
+        inserted++;
+      }
+    } catch (err) {
+      errors.push(`permits/${cbsaFips} (county-agg): ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return { inserted, errors };
+  }
+
+  const series = MSA_SERIES[cbsaFips];
+  if (!series) return { inserted: 0, errors: [`No FRED series for CBSA ${cbsaFips}`] };
 
   try {
     const [totalObs, sfObs] = await Promise.all([
@@ -44,7 +71,6 @@ async function fetchPermits(
       fetchSeries(series.singleFamilyPermits, { startDate }),
     ]);
 
-    // Index single family by date for lookup
     const sfMap = new Map(sfObs.map((o) => [o.date, Math.round(parseFloat(o.value))]));
 
     for (const obs of totalObs) {
@@ -81,16 +107,23 @@ async function fetchEmployment(
   cbsaFips: string,
   startDate: string
 ): Promise<{ inserted: number; errors: string[] }> {
+  // Resolve series IDs — prefer MSA_SERIES, fall back to MSA_DEMAND_COUNTY_FALLBACK
   const series = MSA_SERIES[cbsaFips];
-  if (!series) return { inserted: 0, errors: [`No FRED series for CBSA ${cbsaFips}`] };
+  const fallback = MSA_DEMAND_COUNTY_FALLBACK[cbsaFips];
+  const employmentSeriesId = series?.nonfarmEmployment || fallback?.msaEmployment;
+  const unemploymentSeriesId = series?.unemploymentRate || fallback?.msaUnemployment;
+
+  if (!employmentSeriesId) {
+    return { inserted: 0, errors: [`No employment series for CBSA ${cbsaFips}`] };
+  }
 
   const errors: string[] = [];
   let inserted = 0;
 
   try {
     const [nonfarmObs, urObs] = await Promise.all([
-      fetchSeries(series.nonfarmEmployment, { startDate }),
-      fetchSeries(series.unemploymentRate, { startDate }),
+      fetchSeries(employmentSeriesId, { startDate }),
+      unemploymentSeriesId ? fetchSeries(unemploymentSeriesId, { startDate }) : Promise.resolve([]),
     ]);
 
     // Index unemployment rate by date
@@ -144,13 +177,18 @@ async function fetchPopulation(
   startDate: string
 ): Promise<{ inserted: number; errors: string[] }> {
   const series = MSA_SERIES[cbsaFips];
-  if (!series) return { inserted: 0, errors: [`No FRED series for CBSA ${cbsaFips}`] };
+  const fallback = MSA_DEMAND_COUNTY_FALLBACK[cbsaFips];
+  const populationSeriesId = series?.population || fallback?.msaPopulation;
+
+  if (!populationSeriesId) {
+    return { inserted: 0, errors: [`No population series for CBSA ${cbsaFips}`] };
+  }
 
   const errors: string[] = [];
   let inserted = 0;
 
   try {
-    const popObs = await fetchSeries(series.population, { startDate });
+    const popObs = await fetchSeries(populationSeriesId, { startDate });
 
     for (const obs of popObs) {
       const pop = Math.round(parseFloat(obs.value) * 1000); // FRED reports in thousands

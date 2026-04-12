@@ -67,6 +67,54 @@ export async function fetchSeries(
 }
 
 /**
+ * Fetch and sum annual permit counts across a list of county FIPS codes.
+ * Used for MSAs without MSA-level permit series (Cleveland, Providence, Provo).
+ *
+ * Returns a pseudo-monthly series by dividing annual totals by 12.
+ * This is an approximation but works for scoring since we compare ratios
+ * and YoY rates across markets.
+ */
+export async function fetchAggregatedCountyPermits(
+  countyFipsList: string[],
+  startDate: string
+): Promise<FredObservation[]> {
+  // Build a date → total map
+  const totals = new Map<string, number>();
+
+  for (const fips of countyFipsList) {
+    await new Promise((r) => setTimeout(r, 600)); // rate limit
+    try {
+      const obs = await fetchSeries(`BPPRIV${fips}`, { startDate });
+      for (const o of obs) {
+        const v = parseFloat(o.value);
+        if (isNaN(v)) continue;
+        totals.set(o.date, (totals.get(o.date) || 0) + v);
+      }
+    } catch (err) {
+      console.warn(`[fred] county permit fetch failed ${fips}:`, err);
+    }
+  }
+
+  // Convert annual to pseudo-monthly (divide by 12) for consistency with
+  // other MSAs' monthly permit data. Emit as 12 monthly observations
+  // per annual value so trend calculations work.
+  const result: FredObservation[] = [];
+  const sortedDates = [...totals.keys()].sort();
+  for (const yearDate of sortedDates) {
+    const annualTotal = totals.get(yearDate)!;
+    const monthlyAvg = annualTotal / 12;
+    // The annual FRED observation is labeled with YYYY-01-01, representing
+    // the full year. Emit it as a single monthly average record.
+    result.push({
+      date: yearDate,
+      value: String(Math.round(monthlyAvg)),
+    });
+  }
+
+  return result;
+}
+
+/**
  * Search for FRED series by keyword.
  */
 export async function searchSeries(
@@ -390,5 +438,82 @@ export const MSA_SERIES: Record<
     nonfarmEmployment: "MYRT845NA",
     unemploymentRate: "MYRT845URN",
     population: "MYRPOP",
+  },
+  // ─── Markets with MSA-level FRED data (added via county-agg for capacity) ───
+  "16980": {
+    // Chicago-Naperville-Elgin
+    totalPermits: "CHIC917BPPRIVSA",
+    singleFamilyPermits: "CHIC917BP1FHSA",
+    nonfarmEmployment: "CHIC917NA",
+    unemploymentRate: "CHIC917URN",
+    population: "CHIPOP",
+  },
+  "47900": {
+    // Washington-Arlington-Alexandria
+    totalPermits: "WASH911BPPRIVSA",
+    singleFamilyPermits: "WASH911BP1FHSA",
+    nonfarmEmployment: "WASH911NA",
+    unemploymentRate: "WASH911URN",
+    population: "WSHPOP",
+  },
+  "38900": {
+    // Portland-Vancouver-Hillsboro
+    totalPermits: "PORT941BPPRIVSA",
+    singleFamilyPermits: "PORT941BP1FHSA",
+    nonfarmEmployment: "PORT941NA",
+    unemploymentRate: "PORT941URN",
+    population: "PORPOP",
+  },
+  "26900": {
+    // Indianapolis-Carmel-Anderson
+    totalPermits: "INDI918BPPRIVSA",
+    singleFamilyPermits: "INDI918BP1FHSA",
+    nonfarmEmployment: "INDI918NA",
+    unemploymentRate: "INDI918URN",
+    population: "INDPOP",
+  },
+  "17140": {
+    // Cincinnati
+    totalPermits: "CINC139BPPRIVSA",
+    singleFamilyPermits: "CINC139BP1FHSA",
+    nonfarmEmployment: "CINC139NA",
+    unemploymentRate: "CINC139URN",
+    population: "CTIPOP",
+  },
+};
+
+/**
+ * Markets where some demand metrics (typically permits) must be aggregated
+ * from county-level FRED series because MSA-level data is missing or stale.
+ *
+ * County FIPS format: BPPRIV + 0 + 2-digit state + 3-digit county
+ */
+export const MSA_DEMAND_COUNTY_FALLBACK: Record<string, {
+  counties: string[]; // county FIPS codes (6-digit with leading 0)
+  // Partial series that ARE available at MSA level (use these when set)
+  msaEmployment?: string;
+  msaUnemployment?: string;
+  msaPopulation?: string;
+}> = {
+  // Cleveland-Elyria: no MSA permits due to 2023 redesignation.
+  // Use post-redesignation Cleveland, OH MSA (C1741) employment series.
+  "17460": {
+    counties: ["039035", "039055", "039085", "039093", "039103"],
+    msaEmployment: "SMS39174100000000001",
+    msaPopulation: "CVLPOP",
+    msaUnemployment: "CLEV439URN",
+  },
+  // Providence-Warwick: no MSA permits
+  "39300": {
+    counties: ["044007", "044003", "044005", "044009", "044001", "025005"],
+    msaEmployment: "SMS44393000000000001",
+    msaPopulation: "PRIPOP",
+  },
+  // Provo-Orem-Lehi: no MSA permits
+  "39340": {
+    counties: ["049049", "049023"],
+    msaEmployment: "PROV349NA",
+    msaUnemployment: "PROV349URN",
+    msaPopulation: "PRVPOP",
   },
 };
