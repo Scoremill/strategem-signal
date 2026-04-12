@@ -43,13 +43,13 @@ Key context:
 
 export interface PortfolioNarrative {
   summary: string;       // 4-6 sentence executive overview
-  topPicks: Array<{      // 3-4 best markets for capital deployment
+  topPicks: Array<{      // top 10 markets for capital deployment
     market: string;
     reason: string;      // 1-2 sentence rationale
     ratio: number;
     caution: string;     // what to watch out for
   }>;
-  watchList: Array<{     // markets with emerging risk
+  watchList: Array<{     // top 10 markets with emerging risk
     market: string;
     concern: string;
   }>;
@@ -75,8 +75,8 @@ ${marketLines}
 
 Return a JSON object with:
 - "summary": A 4-6 sentence executive overview. Start with how many markets are favorable vs constrained. Identify the top 2-3 markets for capital deployment and why. Call out the biggest risk in the portfolio. End with an overall portfolio posture recommendation.
-- "topPicks": Array of 3-4 objects, each with "market" (city name), "reason" (1-2 sentence rationale for why this is a top pick — reference specific data), "ratio" (the D/C ratio number), and "caution" (1 sentence on what could change or what to monitor).
-- "watchList": Array of 2-3 objects with "market" and "concern" — markets where conditions are deteriorating or where the builder should be cautious. Focus on constrained markets with high wage growth.
+- "topPicks": Array of EXACTLY 10 objects, ranked from best to worst opportunity for capital deployment. Each object has "market" (city name), "reason" (1-2 sentence rationale for why this is a top pick — reference specific data), "ratio" (the D/C ratio number), and "caution" (1 sentence on what could change or what to monitor). Pull from FAVORABLE and BALANCED markets. If fewer than 10 favorable markets exist, fill the remainder with the strongest BALANCED markets.
+- "watchList": Array of EXACTLY 10 objects, ranked from highest risk to lowest, each with "market" and "concern" — markets where capacity is most stressed relative to demand. Focus on CONSTRAINED markets first, then BALANCED markets with high wage growth or other stress signals. If fewer than 10 constrained markets exist, fill the remainder with stressed balanced markets.
 
 Return ONLY valid JSON. No markdown.`;
 

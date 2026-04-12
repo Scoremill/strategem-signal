@@ -39,7 +39,7 @@ export default async function HeatmapPage() {
     })
     .from(tradeCapacityData)
     .where(
-      sql`${tradeCapacityData.periodDate} = (SELECT MAX(period_date) FROM trade_capacity_data)`
+      sql`(${tradeCapacityData.geographyId}, ${tradeCapacityData.periodDate}) IN (SELECT geography_id, MAX(period_date) FROM trade_capacity_data GROUP BY geography_id)`
     )
     .groupBy(tradeCapacityData.geographyId);
 

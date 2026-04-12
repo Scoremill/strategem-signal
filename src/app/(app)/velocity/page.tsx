@@ -42,7 +42,7 @@ export default async function VelocityPage() {
       totalEstabs: sql<number>`SUM(establishment_count)`,
     })
     .from(tradeCapacityData)
-    .where(sql`${tradeCapacityData.periodDate} = (SELECT MAX(period_date) FROM trade_capacity_data)`)
+    .where(sql`(${tradeCapacityData.geographyId}, ${tradeCapacityData.periodDate}) IN (SELECT geography_id, MAX(period_date) FROM trade_capacity_data GROUP BY geography_id)`)
     .groupBy(tradeCapacityData.geographyId);
 
   const scoreMap = new Map(scores.map((s) => [s.geographyId, s]));

@@ -299,13 +299,17 @@ function parseCSVLine(line: string): string[] {
 }
 
 /**
- * Get the latest available QCEW quarter (3-4 month lag).
+ * Get the latest available QCEW quarter.
+ *
+ * BLS publishes QCEW ~5.5 months after each quarter-end (Q1 published mid-September,
+ * Q2 mid-December, Q3 mid-March, Q4 mid-June). The 6-month lag heuristic is
+ * pessimistic enough to avoid 404s right after a quarter ends but recent enough
+ * to catch new releases the day after they publish.
  */
 export function getLatestQcewQuarter(): { year: number; quarter: number } {
   const now = new Date();
-  // QCEW has ~4 month lag. Current month minus 4, then find the quarter.
   const lagDate = new Date(now);
-  lagDate.setMonth(lagDate.getMonth() - 4);
+  lagDate.setMonth(lagDate.getMonth() - 6);
   const year = lagDate.getFullYear();
   const quarter = Math.ceil((lagDate.getMonth() + 1) / 3);
   return { year, quarter };

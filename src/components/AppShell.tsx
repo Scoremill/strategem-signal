@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import Sidebar from "./Sidebar";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -24,9 +26,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <span className="text-sm font-semibold tracking-tight text-[#1E293B]">
-          Strategem<span className="text-[#F97316]">Signal</span>
-        </span>
+        <Link href="/dashboard" className="flex items-center h-full py-2">
+          <Image
+            src="/Logo.png"
+            alt="StrategemSignal"
+            width={862}
+            height={153}
+            priority
+            className="h-8 w-auto"
+          />
+        </Link>
       </header>
 
       <main className="flex-1 min-h-0 overflow-y-auto">{children}</main>

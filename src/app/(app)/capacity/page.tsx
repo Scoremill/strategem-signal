@@ -8,25 +8,26 @@ import BuilderImplications from "@/components/BuilderImplications";
 export const dynamic = "force-dynamic";
 
 export default async function CapacityPage() {
+  // Per-market latest quarter — different MSAs land on different quarters
+  // depending on when BLS publishes county-aggregated vs MSA-level data.
+  // The display label uses the newest quarter present anywhere in the table.
   const latestQuarter = await db
     .select({ maxDate: sql<string>`MAX(period_date)` })
     .from(tradeCapacityData);
   const maxDate = latestQuarter[0]?.maxDate;
 
-  const capacityData = maxDate
-    ? await db
-        .select({
-          geographyId: tradeCapacityData.geographyId,
-          totalEmployment: sql<number>`SUM(avg_monthly_employment)`,
-          totalEstablishments: sql<number>`SUM(establishment_count)`,
-          avgWeeklyWage: sql<number>`ROUND(AVG(CAST(avg_weekly_wage AS numeric)))`,
-          avgWageYoy: sql<number>`ROUND(AVG(CAST(wage_yoy_change_pct AS numeric)), 1)`,
-          avgEmpYoy: sql<number>`ROUND(AVG(CAST(employment_yoy_change_pct AS numeric)), 1)`,
-        })
-        .from(tradeCapacityData)
-        .where(eq(tradeCapacityData.periodDate, maxDate))
-        .groupBy(tradeCapacityData.geographyId)
-    : [];
+  const capacityData = await db
+    .select({
+      geographyId: tradeCapacityData.geographyId,
+      totalEmployment: sql<number>`SUM(avg_monthly_employment)`,
+      totalEstablishments: sql<number>`SUM(establishment_count)`,
+      avgWeeklyWage: sql<number>`ROUND(AVG(CAST(avg_weekly_wage AS numeric)))`,
+      avgWageYoy: sql<number>`ROUND(AVG(CAST(wage_yoy_change_pct AS numeric)), 1)`,
+      avgEmpYoy: sql<number>`ROUND(AVG(CAST(employment_yoy_change_pct AS numeric)), 1)`,
+    })
+    .from(tradeCapacityData)
+    .where(sql`(${tradeCapacityData.geographyId}, ${tradeCapacityData.periodDate}) IN (SELECT geography_id, MAX(period_date) FROM trade_capacity_data GROUP BY geography_id)`)
+    .groupBy(tradeCapacityData.geographyId);
 
   const markets = await db.select().from(geographies).orderBy(geographies.shortName);
 
