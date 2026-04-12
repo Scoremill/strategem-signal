@@ -15,7 +15,7 @@ const NAV_ITEMS = [
     ),
   },
   {
-    label: "Dashboard",
+    label: "Market Dashboard",
     href: "/dashboard",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -86,7 +86,7 @@ export default function PortfolioIntelligence() {
             <h3 className="text-sm font-semibold text-green-800">Top Markets for Capital Deployment</h3>
           </div>
           <div className="divide-y divide-gray-100">
-            {data.topPicks.map((pick, i) => (
+            {data.topPicks.slice(0, 10).map((pick, i) => (
               <div key={i} className="px-5 py-4">
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-semibold text-[#1E293B] text-sm">{pick.market}</span>
@@ -105,7 +105,7 @@ export default function PortfolioIntelligence() {
             <h3 className="text-sm font-semibold text-red-800">Markets to Watch — Capacity Risk</h3>
           </div>
           <div className="divide-y divide-gray-100">
-            {data.watchList.map((item, i) => (
+            {data.watchList.slice(0, 10).map((item, i) => (
               <div key={i} className="px-5 py-4">
                 <span className="font-semibold text-[#1E293B] text-sm">{item.market}</span>
                 <p className="text-xs text-[#4B5563] leading-relaxed mt-1">{item.concern}</p>

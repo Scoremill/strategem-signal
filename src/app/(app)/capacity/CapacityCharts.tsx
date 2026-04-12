@@ -66,6 +66,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
 
   return (
     <div className="space-y-8">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {/* Quadrant Chart */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="mb-4">
@@ -138,7 +139,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
             Small but Affordable
           </div>
           <div className="absolute bottom-8 right-10 text-[10px] font-semibold text-green-600 uppercase tracking-wider">
-            Deploy Capital Here
+            Favorable For Capital Deployment
           </div>
         </div>
       </div>
@@ -192,6 +193,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
           <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#EF4444]" /> Wage 5–7%</span>
           <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#DC2626]" /> Wage &gt;7%</span>
         </div>
+      </div>
       </div>
     </div>
   );

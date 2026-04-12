@@ -48,7 +48,7 @@ export default function TopPicksPanel() {
   return (
     <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-[#EA580C] mb-3">
-        Deploy Capital Here
+        Favorable For Capital Deployment
       </p>
       <div className="space-y-3">
         {picks.map((pick, i) => (

@@ -107,7 +107,7 @@ export default async function DashboardPage() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1E293B]">Portfolio Dashboard</h1>
+        <h1 className="text-2xl font-bold text-[#1E293B]">Market Dashboard</h1>
         <p className="text-sm text-[#6B7280] mt-1">
           Demand-Capacity overview across {markets.length} monitored markets
           {maxScoreDate && ` — Scored ${new Date(maxScoreDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
