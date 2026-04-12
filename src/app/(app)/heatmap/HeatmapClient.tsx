@@ -31,11 +31,19 @@ function getColor(value: number | null, metric: MetricView): string {
     return "#16A34A";                    // deep green
   }
 
-  // For demand/capacity: 0-100 scale
-  if (value >= 70) return "#DC2626";
-  if (value >= 50) return "#EAB308";
-  if (value >= 30) return "#22C55E";
-  return "#16A34A";
+  // Demand: high = hot (more demand pressure) → red
+  if (metric === "demand") {
+    if (value >= 70) return "#DC2626";
+    if (value >= 50) return "#D97706";
+    if (value >= 30) return "#22C55E";
+    return "#16A34A";
+  }
+
+  // Capacity: high = good (more labor available) → green
+  if (value >= 70) return "#16A34A";  // deep green — strong capacity
+  if (value >= 50) return "#22C55E";  // green
+  if (value >= 30) return "#D97706";  // amber — moderate capacity
+  return "#DC2626";                    // red — weak capacity
 }
 
 function getSize(value: number | null, metric: MetricView): number {
@@ -223,12 +231,19 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
             <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#EF4444]" /> 1.15–1.5</span>
             <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#DC2626]" /> &gt;1.5</span>
           </div>
-        ) : (
+        ) : metric === "demand" ? (
           <div className="flex items-center gap-4 text-sm text-[#1E293B]">
             <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#16A34A]" /> Low</span>
             <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#22C55E]" /> Moderate</span>
             <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#D97706]" /> High</span>
             <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#DC2626]" /> Very High</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-4 text-sm text-[#1E293B]">
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#DC2626]" /> Weak</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#D97706]" /> Moderate</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#22C55E]" /> Good</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#16A34A]" /> Strong</span>
           </div>
         )}
       </div>
