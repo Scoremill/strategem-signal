@@ -78,8 +78,27 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
           </p>
         </div>
 
-        {/* Quadrant labels */}
-        <div className="relative">
+        {/* Quadrant pill legend — outside the chart */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <span className="inline-flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+            Top Left: Tight & Expensive
+          </span>
+          <span className="inline-flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            Top Right: Large but Costly
+          </span>
+          <span className="inline-flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            Bottom Left: Small but Affordable
+          </span>
+          <span className="inline-flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            Bottom Right: Favorable For Capital Deployment
+          </span>
+        </div>
+
+        <div className="flex items-center justify-center">
           <ResponsiveContainer width="100%" height={400}>
             <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -130,20 +149,6 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
               </Scatter>
             </ScatterChart>
           </ResponsiveContainer>
-
-          {/* Quadrant annotations */}
-          <div className="absolute top-6 left-16 text-[10px] font-semibold text-red-400 uppercase tracking-wider">
-            Tight & Expensive
-          </div>
-          <div className="absolute top-6 right-10 text-[10px] font-semibold text-amber-500 uppercase tracking-wider">
-            Large but Costly
-          </div>
-          <div className="absolute bottom-8 left-16 text-[10px] font-semibold text-amber-500 uppercase tracking-wider">
-            Small but Affordable
-          </div>
-          <div className="absolute bottom-8 right-10 text-[10px] font-semibold text-green-600 uppercase tracking-wider">
-            Favorable For Capital Deployment
-          </div>
         </div>
       </div>
 
@@ -155,6 +160,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
             Higher score = more trade labor available. Bar color reflects wage pressure.
           </p>
         </div>
+        <div className="flex items-center justify-center">
         <ResponsiveContainer width="100%" height={markets.length * 36 + 40}>
           <BarChart
             data={rankedData}
@@ -190,6 +196,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+        </div>
         <div className="flex items-center gap-4 mt-3 text-xs text-[#6B7280] border-t border-gray-100 pt-3">
           <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#16A34A]" /> Wage &lt;3%</span>
           <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#D97706]" /> Wage 3–5%</span>
