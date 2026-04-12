@@ -16,6 +16,18 @@ import { randomUUID } from "crypto";
 
 const ACS_BASE = "https://api.census.gov/data";
 
+/**
+ * Override map for MSAs whose CBSA in our DB doesn't match the code Census ACS
+ * publishes under. Cleveland was redesignated by OMB in 2018; FRED and BLS
+ * QCEW still accept the legacy 17460 code for historical continuity, but
+ * Census ACS only knows the post-redesignation 17410. Map our DB code to the
+ * Census-recognized code at fetch time so the rest of the pipeline stays
+ * consistent.
+ */
+const CENSUS_CBSA_OVERRIDE: Record<string, string> = {
+  "17460": "17410", // Cleveland-Elyria, OH
+};
+
 interface IncomePipelineResult {
   marketsProcessed: number;
   recordsInserted: number;
@@ -83,16 +95,18 @@ export async function runIncomePipeline(
     let marketRecords = 0;
     const sortedVintages = [...byVintage.keys()].sort((a, b) => a - b);
 
+    const lookupCbsa = CENSUS_CBSA_OVERRIDE[market.cbsaFips] ?? market.cbsaFips;
+
     for (let i = 0; i < sortedVintages.length; i++) {
       const year = sortedVintages[i];
       const data = byVintage.get(year)!;
-      const value = data.get(market.cbsaFips);
+      const value = data.get(lookupCbsa);
       if (value == null) continue;
 
       // Compute YoY using the prior vintage's value
       let yoy: number | null = null;
       if (i > 0) {
-        const prior = byVintage.get(sortedVintages[i - 1])?.get(market.cbsaFips);
+        const prior = byVintage.get(sortedVintages[i - 1])?.get(lookupCbsa);
         if (prior && prior > 0) {
           yoy = ((value - prior) / prior) * 100;
         }
