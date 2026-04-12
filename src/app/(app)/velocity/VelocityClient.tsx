@@ -146,7 +146,7 @@ export default function VelocityClient({ markets }: { markets: MarketData[] }) {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#6B7280]">Establishments</span>
+                    <span className="text-[#6B7280]">Trade Contractors</span>
                     <span className="font-medium text-[#1E293B]">{m.establishments?.toLocaleString() ?? "—"}</span>
                   </div>
                 </div>

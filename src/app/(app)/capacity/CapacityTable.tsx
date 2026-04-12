@@ -5,7 +5,7 @@ import SortableTable from "@/components/SortableTable";
 const COLUMNS = [
   { key: "shortName", label: "Market", align: "left" as const },
   { key: "totalEmployment", label: "Trade Workers", align: "right" as const },
-  { key: "totalEstablishments", label: "Establishments", align: "right" as const },
+  { key: "totalEstablishments", label: "Trade Contractors", align: "right" as const },
   { key: "avgWeeklyWage", label: "Avg Weekly Wage", align: "right" as const },
   { key: "avgWageYoy", label: "Wage Growth YoY", align: "right" as const },
   { key: "avgEmpYoy", label: "Emp Growth YoY", align: "right" as const },

@@ -250,7 +250,7 @@ export default async function GeographyDetailPage({
                 <th className="text-left py-2 px-5 font-medium text-[#6B7280]">Quarter</th>
                 <th className="text-right py-2 px-5 font-medium text-[#6B7280]">Workers</th>
                 <th className="text-right py-2 px-5 font-medium text-[#6B7280]">Avg Wage/Wk</th>
-                <th className="text-right py-2 px-5 font-medium text-[#6B7280]">Establishments</th>
+                <th className="text-right py-2 px-5 font-medium text-[#6B7280]">Trade Contractors</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

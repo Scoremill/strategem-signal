@@ -87,7 +87,7 @@ export default function BuilderImplications() {
                     {pricing.label}
                   </span>
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${risk.bg} ${risk.text}`}>
-                    Cycle Risk: {imp.cycleTimeRisk}
+                    Cycle Time Risk: {imp.cycleTimeRisk}
                   </span>
                 </div>
                 <p className="text-xs text-[#4B5563] leading-relaxed">{imp.implication}</p>

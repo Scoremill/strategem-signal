@@ -105,7 +105,7 @@ export default async function CapacityPage() {
           <p className="text-[10px] text-[#6B7280] mt-0.5">NAICS 2381-2389, all MSAs</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Trade Establishments</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Trade Contractors</p>
           <p className="text-3xl font-bold text-[#1E293B] mt-1">{totalEstabs.toLocaleString()}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">

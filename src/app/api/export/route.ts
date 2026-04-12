@@ -87,7 +87,7 @@ export async function GET() {
     "Trade Workers",
     "Avg Weekly Wage",
     "Wage Growth YoY",
-    "Trade Establishments",
+    "Trade Contractors",
   ];
 
   const rows = markets.map((m) => {
