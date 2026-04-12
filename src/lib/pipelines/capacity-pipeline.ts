@@ -5,7 +5,7 @@
 import { db } from "@/lib/db";
 import { geographies, tradeCapacityData, permitData } from "@/lib/db/schema";
 import { fetchQcewTrades, getLatestQcewQuarter, getBackfillQuarters } from "./qcew-client";
-import { eq, sql, and, desc } from "drizzle-orm";
+import { eq, sql, and, desc, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 interface CapacityPipelineResult {
@@ -24,10 +24,30 @@ function quarterEndDate(year: number, quarter: number): string {
 }
 
 /**
+ * Run the capacity pipeline scoped to a specific list of CBSA FIPS codes.
+ * Used for targeted backfills (e.g., new market additions) without re-running all 50+.
+ */
+export async function runCapacityPipelineForCbsas(
+  cbsaFipsList: string[],
+  backfill = false
+): Promise<CapacityPipelineResult> {
+  return runCapacityPipelineInternal(backfill, cbsaFipsList);
+}
+
+/**
  * Run the capacity pipeline for all active MSAs.
  */
 export async function runCapacityPipeline(backfill = false): Promise<CapacityPipelineResult> {
-  const markets = await db.select().from(geographies).where(eq(geographies.isActive, true));
+  return runCapacityPipelineInternal(backfill);
+}
+
+async function runCapacityPipelineInternal(
+  backfill: boolean,
+  cbsaFilter?: string[]
+): Promise<CapacityPipelineResult> {
+  const markets = cbsaFilter && cbsaFilter.length
+    ? await db.select().from(geographies).where(and(eq(geographies.isActive, true), inArray(geographies.cbsaFips, cbsaFilter)))
+    : await db.select().from(geographies).where(eq(geographies.isActive, true));
 
   const quarters = backfill ? getBackfillQuarters() : [getLatestQcewQuarter()];
 

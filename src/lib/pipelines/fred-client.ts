@@ -480,6 +480,63 @@ export const MSA_SERIES: Record<
     unemploymentRate: "CINC139URN",
     population: "CTIPOP",
   },
+  // ─── 9-market expansion (April 2026): Tier 1 + Tier 2 ─────────────
+  "38300": {
+    // Pittsburgh, PA
+    totalPermits: "PITT342BPPRIVSA",
+    singleFamilyPermits: "PITT342BP1FHSA",
+    nonfarmEmployment: "PITT342NA",
+    unemploymentRate: "PITT342URN",
+    population: "PITPOP",
+  },
+  "46060": {
+    // Tucson, AZ
+    totalPermits: "TUCS004BPPRIVSA",
+    singleFamilyPermits: "TUCS004BP1FHSA",
+    nonfarmEmployment: "TUSC004NA",
+    unemploymentRate: "TUCS004URN",
+    population: "TUCPOP",
+  },
+  "28140": {
+    // Kansas City, MO-KS
+    totalPermits: "KANS129BPPRIVSA",
+    singleFamilyPermits: "KANS129BP1FHSA",
+    nonfarmEmployment: "KANS129NA",
+    unemploymentRate: "KANS129URN",
+    population: "KNCPOP",
+  },
+  "40060": {
+    // Richmond, VA
+    totalPermits: "RICH051BPPRIVSA",
+    singleFamilyPermits: "RICH051BP1FHSA",
+    nonfarmEmployment: "RICH051NA",
+    unemploymentRate: "RICH051URN",
+    population: "VARICH0POP",
+  },
+  "13820": {
+    // Birmingham-Hoover, AL
+    totalPermits: "BIRM801BPPRIVSA",
+    singleFamilyPermits: "BIRM801BP1FHSA",
+    nonfarmEmployment: "BIRM801NA",
+    unemploymentRate: "BIRM801URN",
+    population: "BIRPOP",
+  },
+  "32820": {
+    // Memphis, TN-MS-AR
+    totalPermits: "MPHBPPRIVSA",
+    singleFamilyPermits: "MPHBP1FHSA",
+    nonfarmEmployment: "MPHNA",
+    unemploymentRate: "MPHURN",
+    population: "MPHPOP",
+  },
+  "10740": {
+    // Albuquerque, NM
+    totalPermits: "ALBU735BPPRIVSA",
+    singleFamilyPermits: "ALBU735BP1FHSA",
+    nonfarmEmployment: "ALBU735NA",
+    unemploymentRate: "ALBU735URN",
+    population: "ABQPOP",
+  },
 };
 
 /**
@@ -515,5 +572,19 @@ export const MSA_DEMAND_COUNTY_FALLBACK: Record<string, {
     msaEmployment: "PROV349NA",
     msaUnemployment: "PROV349URN",
     msaPopulation: "PRVPOP",
+  },
+  // Little Rock-North Little Rock-Conway, AR: no MSA permits, FRED has MSA emp/UR/pop
+  "30780": {
+    counties: ["005045", "005051", "005053", "005085", "005105", "005119", "005125"],
+    msaEmployment: "LRSNA",
+    msaUnemployment: "LRSURN",
+    msaPopulation: "LRSPOP",
+  },
+  // Jackson, MS: no MSA permits, FRED has MSA emp/UR/pop
+  "27140": {
+    counties: ["028029", "028049", "028051", "028089", "028121", "028127", "028163"],
+    msaEmployment: "JACK128NA",
+    msaUnemployment: "JACK128URN",
+    msaPopulation: "JASPOP",
   },
 };

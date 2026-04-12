@@ -5,7 +5,7 @@
 import { db } from "@/lib/db";
 import { geographies, permitData, employmentData, migrationData } from "@/lib/db/schema";
 import { fetchSeries, fetchAggregatedCountyPermits, MSA_SERIES, MSA_DEMAND_COUNTY_FALLBACK } from "./fred-client";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 interface PipelineResult {
@@ -214,10 +214,31 @@ async function fetchPopulation(
 }
 
 /**
+ * Run the demand pipeline scoped to a specific list of CBSA FIPS codes.
+ * Used for targeted backfills (e.g., new market additions) without re-running all 50+.
+ */
+export async function runDemandPipelineForCbsas(
+  cbsaFipsList: string[],
+  backfill = false
+): Promise<PipelineResult> {
+  return runDemandPipelineInternal(backfill, cbsaFipsList);
+}
+
+/**
  * Run the full demand pipeline for all active MSAs.
  */
 export async function runDemandPipeline(backfill = false): Promise<PipelineResult> {
-  const markets = await db.select().from(geographies).where(eq(geographies.isActive, true));
+  return runDemandPipelineInternal(backfill);
+}
+
+async function runDemandPipelineInternal(
+  backfill: boolean,
+  cbsaFilter?: string[]
+): Promise<PipelineResult> {
+  const baseQuery = db.select().from(geographies).where(eq(geographies.isActive, true));
+  const markets = cbsaFilter && cbsaFilter.length
+    ? await db.select().from(geographies).where(and(eq(geographies.isActive, true), inArray(geographies.cbsaFips, cbsaFilter)))
+    : await baseQuery;
   const startDate = getStartDate(backfill);
   const result: PipelineResult = {
     permitsInserted: 0,
