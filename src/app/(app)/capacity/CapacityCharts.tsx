@@ -167,10 +167,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                 <LabelList
                   dataKey="name"
                   content={(props: any) => {
-                    const { x, y, value, index } = props;
-                    if (typeof index !== "number") return null;
-                    const entry = QUADRANT_SCATTER[index];
-                    if (!entry?.showLabel) return null;
+                    const { x, y, value } = props;
                     const cx = typeof x === "number" ? x : parseFloat(x ?? "0");
                     const cy = typeof y === "number" ? y : parseFloat(y ?? "0");
                     return (
@@ -178,7 +175,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                         x={cx}
                         y={cy - 10}
                         fill="#1E293B"
-                        fontSize={10}
+                        fontSize={9}
                         fontWeight={500}
                         textAnchor="middle"
                         style={{ pointerEvents: "none" } as React.CSSProperties}
