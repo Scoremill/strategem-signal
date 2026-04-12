@@ -70,59 +70,6 @@ export default function VelocityClient({ markets }: { markets: MarketData[] }) {
 
   return (
     <div className="space-y-8">
-      {/* Demand-Capacity Gap Ranking */}
-      <div>
-        <h2 className="text-lg font-bold text-[#1E293B] mb-1">Demand-Capacity Gap</h2>
-        <p className="text-sm text-[#6B7280] mb-4">
-          Markets ranked by the gap between demand strength and available capacity. Positive gap = demand outrunning capacity.
-        </p>
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="divide-y divide-gray-100">
-            {ranked.map((m) => {
-              const isPositive = m.gap > 0;
-              return (
-                <div key={m.id} className="px-5 py-3 flex items-center gap-4">
-                  <div className="w-40">
-                    <span className="font-medium text-[#1E293B] text-sm">{m.shortName}</span>
-                    <span className="text-xs text-[#6B7280] ml-1">{m.state}</span>
-                  </div>
-                  <div className="flex-1 flex items-center gap-2">
-                    {/* Visual bar showing gap */}
-                    <div className="flex-1 relative h-6 bg-gray-50 rounded overflow-hidden">
-                      <div className="absolute inset-y-0 left-1/2 w-px bg-gray-300" />
-                      {isPositive ? (
-                        <div
-                          className="absolute inset-y-0 left-1/2 bg-red-200 rounded-r"
-                          style={{ width: `${Math.min(50, Math.abs(m.gap) / 2)}%` }}
-                        />
-                      ) : (
-                        <div
-                          className="absolute inset-y-0 bg-green-200 rounded-l"
-                          style={{ width: `${Math.min(50, Math.abs(m.gap) / 2)}%`, right: "50%" }}
-                        />
-                      )}
-                    </div>
-                  </div>
-                  <div className="w-20 text-right">
-                    <span className={`text-sm font-bold ${isPositive ? "text-red-700" : "text-green-700"}`}>
-                      {isPositive ? "+" : ""}{m.gap}
-                    </span>
-                  </div>
-                  <div className="w-16 text-center">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BG[m.status]}`}>
-                      {STATUS_LABEL[m.status]}
-                    </span>
-                  </div>
-                  <div className="w-24 text-right text-xs text-[#6B7280]">
-                    D:{m.demandIndex} C:{m.capacityIndex}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
       {/* Market Comparison Tool */}
       <div>
         <h2 className="text-lg font-bold text-[#1E293B] mb-1">Market Comparison</h2>
@@ -211,6 +158,58 @@ export default function VelocityClient({ markets }: { markets: MarketData[] }) {
             <p className="text-[#6B7280]">Select markets above to compare</p>
           </div>
         )}
+      </div>
+
+      {/* Demand-Capacity Gap Ranking */}
+      <div>
+        <h2 className="text-lg font-bold text-[#1E293B] mb-1">Demand-Capacity Gap</h2>
+        <p className="text-sm text-[#6B7280] mb-4">
+          Markets ranked by the gap between demand strength and available capacity. Positive gap = demand outrunning capacity.
+        </p>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="divide-y divide-gray-100">
+            {ranked.map((m) => {
+              const isPositive = m.gap > 0;
+              return (
+                <div key={m.id} className="px-5 py-3 flex items-center gap-4">
+                  <div className="w-40">
+                    <span className="font-medium text-[#1E293B] text-sm">{m.shortName}</span>
+                    <span className="text-xs text-[#6B7280] ml-1">{m.state}</span>
+                  </div>
+                  <div className="flex-1 flex items-center gap-2">
+                    <div className="flex-1 relative h-6 bg-gray-50 rounded overflow-hidden">
+                      <div className="absolute inset-y-0 left-1/2 w-px bg-gray-300" />
+                      {isPositive ? (
+                        <div
+                          className="absolute inset-y-0 left-1/2 bg-red-200 rounded-r"
+                          style={{ width: `${Math.min(50, Math.abs(m.gap) / 2)}%` }}
+                        />
+                      ) : (
+                        <div
+                          className="absolute inset-y-0 bg-green-200 rounded-l"
+                          style={{ width: `${Math.min(50, Math.abs(m.gap) / 2)}%`, right: "50%" }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <div className="w-20 text-right">
+                    <span className={`text-sm font-bold ${isPositive ? "text-red-700" : "text-green-700"}`}>
+                      {isPositive ? "+" : ""}{m.gap}
+                    </span>
+                  </div>
+                  <div className="w-16 text-center">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BG[m.status]}`}>
+                      {STATUS_LABEL[m.status]}
+                    </span>
+                  </div>
+                  <div className="w-24 text-right text-xs text-[#6B7280]">
+                    D:{m.demandIndex} C:{m.capacityIndex}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
