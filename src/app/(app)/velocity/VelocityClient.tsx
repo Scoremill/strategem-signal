@@ -54,7 +54,7 @@ export default function VelocityClient({ markets }: { markets: MarketData[] }) {
 
   function toggleMarket(id: string) {
     setSelected((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : prev.length < 4 ? [...prev, id] : prev
+      prev.includes(id) ? prev.filter((s) => s !== id) : prev.length < 5 ? [...prev, id] : prev
     );
   }
 
@@ -74,7 +74,7 @@ export default function VelocityClient({ markets }: { markets: MarketData[] }) {
       <div>
         <h2 className="text-lg font-bold text-[#1E293B] mb-1">Market Comparison</h2>
         <p className="text-sm text-[#6B7280] mb-4">
-          Select up to 4 markets to compare side-by-side across all metrics.
+          Select up to 5 markets to compare side-by-side across all metrics.
         </p>
 
         {/* Market selector */}
@@ -96,7 +96,7 @@ export default function VelocityClient({ markets }: { markets: MarketData[] }) {
 
         {/* Comparison cards */}
         {selectedMarkets.length > 0 ? (
-          <div className={`grid gap-4 ${selectedMarkets.length === 1 ? "grid-cols-1 max-w-md" : selectedMarkets.length === 2 ? "grid-cols-2" : selectedMarkets.length === 3 ? "grid-cols-3" : "grid-cols-2 lg:grid-cols-4"}`}>
+          <div className={`grid gap-4 ${selectedMarkets.length === 1 ? "grid-cols-1 max-w-md" : selectedMarkets.length === 2 ? "grid-cols-2" : selectedMarkets.length === 3 ? "grid-cols-3" : selectedMarkets.length === 4 ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-2 lg:grid-cols-5"}`}>
             {selectedMarkets.map((m) => (
               <div key={m.id} className="bg-white rounded-xl border border-gray-200 p-5">
                 <div className="flex items-center justify-between mb-4">

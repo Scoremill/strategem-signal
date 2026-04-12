@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
-import { geographies, tradeCapacityData } from "@/lib/db/schema";
+import { geographies, tradeCapacityData, demandCapacityScores } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
+import CapacityCharts from "./CapacityCharts";
 import CapacityTable, { CapacityRow } from "./CapacityTable";
 import BuilderImplications from "@/components/BuilderImplications";
 
@@ -28,7 +29,15 @@ export default async function CapacityPage() {
     : [];
 
   const markets = await db.select().from(geographies).orderBy(geographies.shortName);
+
+  // Get scores for status
+  const latestScoreDate = await db.select({ maxDate: sql<string>`MAX(score_date)` }).from(demandCapacityScores);
+  const scores = latestScoreDate[0]?.maxDate
+    ? await db.select().from(demandCapacityScores).where(eq(demandCapacityScores.scoreDate, latestScoreDate[0].maxDate))
+    : [];
+
   const capMap = new Map(capacityData.map((c) => [c.geographyId, c]));
+  const scoreMap = new Map(scores.map((s) => [s.geographyId, s]));
 
   const totalWorkers = capacityData.reduce((s, c) => s + Number(c.totalEmployment), 0);
   const totalEstabs = capacityData.reduce((s, c) => s + Number(c.totalEstablishments), 0);
@@ -39,7 +48,27 @@ export default async function CapacityPage() {
     ? (capacityData.reduce((s, c) => s + Number(c.avgWageYoy || 0), 0) / capacityData.length).toFixed(1)
     : "—";
 
-  const rows: CapacityRow[] = markets.map((m) => {
+  // Chart data
+  const chartMarkets = markets
+    .filter((m) => capMap.has(m.id))
+    .map((m) => {
+      const cap = capMap.get(m.id)!;
+      const score = scoreMap.get(m.id);
+      return {
+        id: m.id,
+        shortName: m.shortName,
+        totalEmployment: Number(cap.totalEmployment),
+        totalEstablishments: Number(cap.totalEstablishments),
+        avgWeeklyWage: Number(cap.avgWeeklyWage),
+        avgWageYoy: Number(cap.avgWageYoy),
+        avgEmpYoy: Number(cap.avgEmpYoy),
+        capacityIndex: score ? parseFloat(String(score.capacityIndex)) : 50,
+        status: score?.status ?? "equilibrium",
+      };
+    });
+
+  // Table data
+  const tableRows: CapacityRow[] = markets.map((m) => {
     const cap = capMap.get(m.id);
     return {
       id: m.id,
@@ -57,7 +86,7 @@ export default async function CapacityPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#1E293B]">Trade Capacity Dashboard</h1>
         <p className="text-sm text-[#6B7280] mt-1">
-          Trade labor employment, wages, and establishment counts across monitored markets
+          Where is trade labor available and affordable?
           {maxDate && (
             <span>
               {" "}— Data as of{" "}
@@ -85,26 +114,28 @@ export default async function CapacityPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Avg Wage Growth YoY</p>
           <p className={`text-3xl font-bold mt-1 ${
-            Number(avgWageGrowth) > 5 ? "text-red-600" : Number(avgWageGrowth) > 3 ? "text-yellow-600" : "text-green-600"
+            Number(avgWageGrowth) > 5 ? "text-red-600" : Number(avgWageGrowth) > 3 ? "text-amber-600" : "text-green-600"
           }`}>
             {avgWageGrowth}%
-          </p>
-          <p className="text-[10px] text-[#6B7280] mt-0.5">
-            {Number(avgWageGrowth) > 5 ? "Capacity pressure" : "Stable"}
           </p>
         </div>
       </div>
 
-      {/* Builder Implications */}
-      <BuilderImplications />
+      {/* Visual Charts */}
+      <CapacityCharts markets={chartMarkets} />
 
-      {/* Capacity table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Builder Implications */}
+      <div className="mt-8">
+        <BuilderImplications />
+      </div>
+
+      {/* Detailed Data Table */}
+      <div className="mt-8 bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[#1E293B]">Trade Capacity by Market</h2>
+          <h2 className="text-sm font-semibold text-[#1E293B]">Detailed Trade Data</h2>
           <span className="text-xs text-[#6B7280]">Click column headers to sort</span>
         </div>
-        <CapacityTable rows={rows} />
+        <CapacityTable rows={tableRows} />
       </div>
     </div>
   );

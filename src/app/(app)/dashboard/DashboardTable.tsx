@@ -41,7 +41,7 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
       columns={COLUMNS}
       data={rows as unknown as Record<string, unknown>[]}
       defaultSortKey="ratio"
-      defaultSortDir="desc"
+      defaultSortDir="asc"
       renderRow={(row) => {
         const r = row as unknown as DashboardRow;
         const style = r.status ? STATUS_STYLES[r.status] : null;
