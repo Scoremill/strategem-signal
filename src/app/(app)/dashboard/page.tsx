@@ -8,6 +8,7 @@ import {
 } from "@/lib/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import DashboardTable, { DashboardRow } from "./DashboardTable";
+import PortfolioIntelligence from "@/components/PortfolioIntelligence";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +113,9 @@ export default async function DashboardPage() {
           {maxScoreDate && ` — Scored ${new Date(maxScoreDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
         </p>
       </div>
+
+      {/* Portfolio Intelligence */}
+      <PortfolioIntelligence />
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import TopPicksPanel from "@/components/TopPicksPanel";
 
 interface MarketPoint {
   id: string;
@@ -246,6 +247,11 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
             <span className="inline-flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#16A34A]" /> Strong</span>
           </div>
         )}
+      </div>
+
+      {/* Top Picks panel */}
+      <div className="absolute top-4 right-4 z-10 w-72">
+        <TopPicksPanel />
       </div>
 
       <div ref={mapContainer} className="w-full h-full" />

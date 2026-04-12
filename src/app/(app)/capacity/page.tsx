@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { geographies, tradeCapacityData } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import CapacityTable, { CapacityRow } from "./CapacityTable";
+import BuilderImplications from "@/components/BuilderImplications";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +94,9 @@ export default async function CapacityPage() {
           </p>
         </div>
       </div>
+
+      {/* Builder Implications */}
+      <BuilderImplications />
 
       {/* Capacity table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
