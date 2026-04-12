@@ -1,0 +1,26 @@
+name: Weekly Market Intelligence Digest
+
+on:
+  schedule:
+    # Friday 7:00 AM CT (12:00 UTC) — execs read it before the weekend
+    - cron: '0 12 * * 5'
+  workflow_dispatch:
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send digest email
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.APP_URL }}/api/cron/digest" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Digest send response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Digest send failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
