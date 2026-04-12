@@ -78,7 +78,7 @@ export default async function VelocityPage() {
     });
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#1E293B]">Market Velocity & Comparison</h1>
         <p className="text-sm text-[#6B7280] mt-1">

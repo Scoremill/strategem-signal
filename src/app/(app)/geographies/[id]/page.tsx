@@ -87,7 +87,7 @@ export default async function GeographyDetailPage({
   const totalTradeWorkers = trades.reduce((s, t) => s + t.avgMonthlyEmployment, 0);
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       {/* Header */}
       <div className="mb-6">
         <Link href="/geographies" className="text-sm text-[#6B7280] hover:text-[#F97316] transition-colors">

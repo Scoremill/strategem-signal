@@ -27,7 +27,7 @@ export default async function AdminPage() {
   const [scores] = await db.select({ count: sql<number>`count(*)` }).from(demandCapacityScores);
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#1E293B]">Admin</h1>
         <p className="text-sm text-[#6B7280] mt-1">

@@ -68,14 +68,14 @@ export default async function HeatmapPage() {
   });
 
   return (
-    <div className="h-screen flex flex-col">
-      <div className="px-8 py-4 border-b border-gray-200 bg-white">
-        <h1 className="text-lg font-bold text-[#1E293B]">Demand-Capacity Heatmap</h1>
-        <p className="text-xs text-[#6B7280]">
+    <div className="h-full flex flex-col">
+      <div className="px-4 sm:px-8 py-3 border-b border-gray-200 bg-white">
+        <h1 className="text-base sm:text-lg font-bold text-[#1E293B]">Demand-Capacity Heatmap</h1>
+        <p className="text-xs text-[#6B7280] mt-0.5">
           Click a market for details. Toggle between Ratio, Demand, and Capacity views.
         </p>
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-h-0">
         <HeatmapClient markets={marketPoints} />
       </div>
     </div>

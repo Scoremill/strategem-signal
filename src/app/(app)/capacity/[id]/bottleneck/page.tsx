@@ -73,7 +73,7 @@ export default async function TradeBottleneckPage({
   ).length;
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-6">
         <Link
           href={`/geographies/${id}`}

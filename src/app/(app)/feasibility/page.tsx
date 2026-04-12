@@ -30,7 +30,7 @@ export default async function FeasibilityPage() {
     .sort((a, b) => a.ratio - b.ratio);
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#1E293B]">Community Feasibility</h1>
         <p className="text-sm text-[#6B7280] mt-1">
