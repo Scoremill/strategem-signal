@@ -166,7 +166,7 @@ export const occupationData = pgTable(
     fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
   },
   (table) => [
-    index("idx_occ_geo_year").on(table.geographyId, table.vintageYear),
+    uniqueIndex("idx_occ_geo_year_soc").on(table.geographyId, table.vintageYear, table.socCode),
     index("idx_occ_soc").on(table.socCode),
   ]
 );
