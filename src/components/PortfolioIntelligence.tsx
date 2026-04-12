@@ -50,7 +50,7 @@ export default function PortfolioIntelligence() {
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
           </div>
-          <p className="text-sm font-semibold text-[#EA580C]">Strategem Portfolio Intelligence</p>
+          <p className="text-sm font-semibold text-[#EA580C]">Strategem Market Intelligence</p>
         </div>
         <div className="animate-pulse space-y-2">
           <div className="h-3 bg-[#F97316]/10 rounded w-full" />
@@ -74,7 +74,7 @@ export default function PortfolioIntelligence() {
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
           </div>
-          <p className="text-sm font-semibold text-[#EA580C]">Strategem Portfolio Intelligence</p>
+          <p className="text-sm font-semibold text-[#EA580C]">Strategem Market Intelligence</p>
         </div>
         <p className="text-sm text-[#1E293B] leading-relaxed">{data.summary}</p>
       </div>

@@ -24,6 +24,7 @@ interface CapacityMarket {
   avgEmpYoy: number;
   capacityIndex: number;
   status: string;
+  tradeAvailability: number;
 }
 
 function getStatusColor(status: string): string {
@@ -40,14 +41,15 @@ function getWageColor(wageYoy: number): string {
 }
 
 export default function CapacityCharts({ markets }: { markets: CapacityMarket[] }) {
-  // Quadrant chart data
+  // Quadrant chart data — Trade Availability (x) vs Wage Pressure (y)
   const scatterData = markets.map((m) => ({
-    x: m.totalEmployment,
+    x: m.tradeAvailability,
     y: m.avgWageYoy,
     z: m.totalEstablishments,
     name: m.shortName,
     status: m.status,
     capacityIndex: m.capacityIndex,
+    workers: m.totalEmployment,
   }));
 
   // Ranked bar data — sorted by capacity index
@@ -62,7 +64,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
 
   const avgCapacity = markets.reduce((s, m) => s + m.capacityIndex, 0) / (markets.length || 1);
   const avgWage = markets.reduce((s, m) => s + m.avgWageYoy, 0) / (markets.length || 1);
-  const avgWorkers = markets.reduce((s, m) => s + m.totalEmployment, 0) / (markets.length || 1);
+  const avgAvailability = markets.reduce((s, m) => s + m.tradeAvailability, 0) / (markets.length || 1);
 
   return (
     <div className="space-y-8">
@@ -70,9 +72,9 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
       {/* Quadrant Chart */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-[#1E293B]">Capacity vs. Cost Pressure</h3>
+          <h3 className="text-sm font-semibold text-[#1E293B]">Trade Availability vs. Cost Pressure</h3>
           <p className="text-xs text-[#6B7280] mt-0.5">
-            Bottom-right = strong capacity, low cost pressure (deploy capital). Top-left = tight labor, rising costs (caution).
+            Trade Availability = workers per permit, adjusted for wage pressure. Higher = more trades available per unit of demand.
           </p>
         </div>
 
@@ -84,9 +86,9 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
               <XAxis
                 type="number"
                 dataKey="x"
-                name="Trade Workers"
-                tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`}
-                label={{ value: "Trade Workers →", position: "insideBottom", offset: -10, style: { fontSize: 11, fill: "#6B7280" } }}
+                name="Trade Availability"
+                tickFormatter={(v) => v.toFixed(0)}
+                label={{ value: "Trade Availability →", position: "insideBottom", offset: -10, style: { fontSize: 11, fill: "#6B7280" } }}
                 stroke="#9CA3AF"
                 tick={{ fontSize: 11 }}
               />
@@ -99,7 +101,7 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                 stroke="#9CA3AF"
                 tick={{ fontSize: 11 }}
               />
-              <ReferenceLine x={avgWorkers} stroke="#D1D5DB" strokeDasharray="5 5" />
+              <ReferenceLine x={avgAvailability} stroke="#D1D5DB" strokeDasharray="5 5" />
               <ReferenceLine y={avgWage} stroke="#D1D5DB" strokeDasharray="5 5" />
               <Tooltip
                 content={({ payload }) => {
@@ -108,7 +110,8 @@ export default function CapacityCharts({ markets }: { markets: CapacityMarket[] 
                   return (
                     <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs">
                       <p className="font-semibold text-[#1E293B]">{d.name}</p>
-                      <p className="text-[#6B7280]">Workers: {d.x.toLocaleString()}</p>
+                      <p className="text-[#6B7280]">Trade Availability: {d.x.toFixed(1)}</p>
+                      <p className="text-[#6B7280]">Trade Workers: {d.workers?.toLocaleString()}</p>
                       <p className="text-[#6B7280]">Wage Growth: {d.y}%</p>
                       <p className="text-[#6B7280]">Capacity Index: {d.capacityIndex}</p>
                     </div>

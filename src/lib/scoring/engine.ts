@@ -78,6 +78,8 @@ interface ScoredMarket {
   // Ratio
   demandCapacityRatio: number;
   status: "favorable" | "equilibrium" | "constrained";
+  // Trade Availability: workers per permit, adjusted for wage pressure
+  tradeAvailability: number;
 }
 
 // ─── Percentile Ranking ──────────────────────────────────────────
@@ -292,6 +294,19 @@ function scoreMarkets(metrics: MarketMetrics[]): ScoredMarket[] {
     else if (demandCapacityRatio < 0.85) status = "favorable";
     else status = "equilibrium";
 
+    // Trade Availability: workers per permit, discounted by wage pressure
+    // Formula: (trade workers / monthly permits) × wage stability factor
+    // Wage stability factor: 1.0 when wages flat, decreasing as wages accelerate
+    // Higher number = more workers available per unit of demand
+    const wageYoy = m.wageGrowthYoy ?? 0;
+    const wageStabilityFactor = Math.max(0.3, 1.0 - (wageYoy / 20)); // 0% wage growth = 1.0, 14%+ = 0.3
+    const rawAvailability = m.tradeWorkers && m.latestPermits && m.latestPermits > 0
+      ? m.tradeWorkers / m.latestPermits
+      : null;
+    const tradeAvailability = rawAvailability !== null
+      ? Math.round(rawAvailability * wageStabilityFactor * 100) / 100
+      : 0;
+
     return {
       geographyId: m.geographyId,
       shortName: m.shortName,
@@ -307,6 +322,7 @@ function scoreMarkets(metrics: MarketMetrics[]): ScoredMarket[] {
       capacityIndex,
       demandCapacityRatio,
       status,
+      tradeAvailability,
     };
   });
 }
@@ -368,6 +384,7 @@ async function persistScores(scored: ScoredMarket[], scoreDate: string): Promise
         capacityIndex: String(s.capacityIndex),
         demandCapacityRatio: String(s.demandCapacityRatio),
         status: s.status,
+        tradeAvailability: String(s.tradeAvailability),
         demandPercentileRank: String(demandPctls[i]),
         capacityPercentileRank: String(capPctls[i]),
         ratioPercentileRank: String(ratioPctls[i]),
@@ -390,6 +407,7 @@ export interface ScoringResult {
     capacityIndex: number;
     ratio: number;
     status: string;
+    tradeAvailability: number;
   }>;
   errors: string[];
 }
@@ -414,6 +432,7 @@ export async function runScoringEngine(): Promise<ScoringResult> {
       capacityIndex: s.capacityIndex,
       ratio: s.demandCapacityRatio,
       status: s.status,
+      tradeAvailability: s.tradeAvailability,
     }));
 
   console.log("[scoring-engine] Results:");
