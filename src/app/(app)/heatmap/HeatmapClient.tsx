@@ -103,7 +103,8 @@ export default function HeatmapClient({ markets }: { markets: MarketPoint[] }) {
 
     for (const m of markets) {
       const value = getValue(m, metric);
-      const color = getColor(value, metric);
+      // Always color by D/C Ratio status — never show a green dot for a constrained market
+      const color = getColor(m.ratio, "ratio");
       const size = getSize(value, metric);
 
       // Create marker element

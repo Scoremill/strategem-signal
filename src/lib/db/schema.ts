@@ -278,6 +278,24 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ─── Cached Narratives ───────────────────────────────────────────
+
+export const narratives = pgTable(
+  "narratives",
+  {
+    id: text("id").primaryKey(),
+    type: text("type").notNull(), // "market", "portfolio", "capacity"
+    geographyId: text("geography_id"), // null for portfolio-level
+    fullNarrative: text("full_narrative"), // long version
+    snippet: text("snippet"), // short version (for popups)
+    metadata: text("metadata"), // JSON — topPicks, watchList, implications, etc.
+    generatedAt: timestamp("generated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_narratives_type_geo").on(table.type, table.geographyId),
+  ]
+);
+
 // ─── Pipeline Logs ───────────────────────────────────────────────
 
 export const fetchLogs = pgTable("fetch_logs", {

@@ -122,6 +122,13 @@ export default function AdminClient({
           >
             {running === "score" ? "Running..." : "Run Scoring Engine"}
           </button>
+          <button
+            onClick={() => runPipeline("narratives")}
+            disabled={running !== null}
+            className="px-4 py-2 bg-[#1E293B] hover:bg-[#334155] text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+          >
+            {running === "narratives" ? "Generating..." : "Generate Narratives"}
+          </button>
           <a
             href="/api/export"
             className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-[#1E293B] text-sm font-medium rounded-lg transition-colors"
