@@ -1,0 +1,33 @@
+name: Monthly StrategemOps Snapshot
+
+# Runs once a month on the 1st at 11:00 UTC (6:00 AM CT).
+# Public homebuilder quarterly earnings are staggered throughout the year, so
+# a monthly cadence catches each builder's freshest report within ~30 days of
+# when it lands at StrategemOps. Daily would be wasteful; quarterly would lag.
+#
+# Companion workflow ops-snapshot-retry.yml runs daily and only fires this
+# endpoint if the most recent snapshot is failed or older than 35 days —
+# self-healing without re-running on healthy days.
+on:
+  schedule:
+    - cron: '0 11 1 * *'
+  workflow_dispatch: # Manual trigger button in GitHub Actions UI
+
+jobs:
+  ops-snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Snapshot StrategemOps benchmark data
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.APP_URL }}/api/cron/ops-snapshot" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Snapshot response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Snapshot failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
