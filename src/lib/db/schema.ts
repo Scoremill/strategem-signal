@@ -1,5 +1,6 @@
 import {
   pgTable,
+  pgEnum,
   text,
   integer,
   bigint,
@@ -200,18 +201,203 @@ export const constructionSpending = pgTable(
 // and a clickable source-traceability drill-down. The corresponding
 // database tables get DROPped in Phase 0.8.
 
-// ─── Users & Auth ────────────────────────────────────────────────
+// ─── Multi-Tenant Foundation (v2) ────────────────────────────────
+//
+// StrategemSignal v2 is a multi-tenant SaaS. The tables below hold the
+// tenant boundary: orgs, users, memberships, role enum, plus the
+// per-org configuration (tracked markets, watchlist, weighting, flags,
+// business cases, alert prefs, alerts, audit log).
+//
+// Every tenant-scoped table carries an `org_id` column. Phase 0.10
+// adds Postgres Row-Level Security policies on top of these tables to
+// enforce tenant isolation at the database engine level — a buggy
+// query cannot leak rows across tenants because the database refuses
+// to return them. The session-variable `app.current_org_id` is set
+// from the JWT on every request via Drizzle middleware.
+//
+// Foreign keys cascade DELETE so offboarding an org is one statement
+// against orgs and the rest of the tenant data evaporates cleanly.
 
-export const users = pgTable("users", {
-  id: text("id").primaryKey(),
-  email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
-  name: text("name"),
-  role: text("role").default("user").notNull(), // "user" | "admin"
-  subscriptionStatus: text("subscription_status").default("active").notNull(),
+// Roles enum — used by org_memberships.role.
+//   owner             — full control, only owner can delete the org
+//   ceo               — read all, edit settings, see board-readiness views
+//   cfo               — read all, focus on capital + ROIC dashboards
+//   coo               — read all, focus on operational filters + cycle time
+//   division_president — read all, focus on a subset of markets
+//   member            — read-only generic access
+export const orgRole = pgEnum("org_role", [
+  "owner",
+  "ceo",
+  "cfo",
+  "coo",
+  "division_president",
+  "member",
+]);
+
+// Customer organizations — one row per homebuilder customer.
+export const orgs = pgTable("orgs", {
+  id: text("id").primaryKey(), // UUID
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(), // lowercased, used in URLs/JWT
+  // Stripe subscription fields populated by Phase 0.12
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  subscriptionStatus: text("subscription_status").default("trial").notNull(),
+  trialEndsAt: timestamp("trial_ends_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+// Users — identity is separate from org membership.
+// One user can belong to multiple orgs via org_memberships.
+export const users = pgTable("users", {
+  id: text("id").primaryKey(), // UUID
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  name: text("name"),
+  emailVerifiedAt: timestamp("email_verified_at"),
+  lastLoginAt: timestamp("last_login_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Org membership — joins users to orgs with a role.
+// The (user_id, org_id) pair is unique so a user has exactly one role per org.
+export const orgMemberships = pgTable("org_memberships", {
+  id: text("id").primaryKey(), // UUID
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  role: orgRole("role").notNull(),
+  invitedBy: text("invited_by").references(() => users.id),
+  invitedAt: timestamp("invited_at"),
+  joinedAt: timestamp("joined_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_org_memberships_user_org").on(table.userId, table.orgId),
+  index("idx_org_memberships_org").on(table.orgId),
+]);
+
+// Tracked markets — the MSAs an org has chosen to actively monitor.
+// Phase 1 Portfolio Health View only scores markets in this list for the org.
+export const trackedMarkets = pgTable("tracked_markets", {
+  id: text("id").primaryKey(), // UUID
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  geographyId: text("geography_id").notNull().references(() => geographies.id),
+  addedBy: text("added_by").references(() => users.id),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_tracked_markets_org_geo").on(table.orgId, table.geographyId),
+  index("idx_tracked_markets_org").on(table.orgId),
+]);
+
+// Watchlist markets — MSAs an org is considering but hasn't tracked yet.
+// Phase 2 Market Opportunity screen surfaces these as candidates.
+export const watchlistMarkets = pgTable("watchlist_markets", {
+  id: text("id").primaryKey(), // UUID
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  geographyId: text("geography_id").notNull().references(() => geographies.id),
+  addedBy: text("added_by").references(() => users.id),
+  notes: text("notes"),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_watchlist_markets_org_geo").on(table.orgId, table.geographyId),
+  index("idx_watchlist_markets_org").on(table.orgId),
+]);
+
+// Health score weighting — per-org tuning of the composite Portfolio Health
+// score. The three sub-scores must sum to 1.0 (enforced in app code).
+// Phase 1's adjustable slider UI writes to this table.
+export const healthScoreWeights = pgTable("health_score_weights", {
+  orgId: text("org_id").primaryKey().references(() => orgs.id, { onDelete: "cascade" }),
+  weightFinancial: decimal("weight_financial", { precision: 4, scale: 3 }).default("0.400").notNull(),
+  weightDemand: decimal("weight_demand", { precision: 4, scale: 3 }).default("0.300").notNull(),
+  weightOperational: decimal("weight_operational", { precision: 4, scale: 3 }).default("0.300").notNull(),
+  updatedBy: text("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Flags — markets a user has flagged with a personal note for follow-up.
+// Org-scoped so other org members can see the same flags.
+export const flags = pgTable("flags", {
+  id: text("id").primaryKey(), // UUID
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  geographyId: text("geography_id").notNull().references(() => geographies.id),
+  flaggedBy: text("flagged_by").notNull().references(() => users.id),
+  note: text("note"),
+  status: text("status").default("open").notNull(), // "open" | "in_review" | "decided" | "dismissed"
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+}, (table) => [
+  index("idx_flags_org").on(table.orgId),
+  index("idx_flags_org_geo").on(table.orgId, table.geographyId),
+]);
+
+// Business cases — saved organic/acquisition entry models from Phase 3.
+// Each case is a JSON blob with the inputs, the computed outputs, and the
+// recommendation. Stored as JSON because the schema will evolve fast in
+// Phase 3 and we don't want a migration per shape change.
+export const businessCases = pgTable("business_cases", {
+  id: text("id").primaryKey(), // UUID
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  geographyId: text("geography_id").notNull().references(() => geographies.id),
+  caseType: text("case_type").notNull(), // "organic" | "acquisition"
+  title: text("title").notNull(),
+  inputsJson: json("inputs_json"),
+  outputsJson: json("outputs_json"),
+  recommendation: text("recommendation"), // "go" | "hold" | "pass"
+  createdBy: text("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_business_cases_org").on(table.orgId),
+]);
+
+// Alert preferences — per-user delivery cadence for the alert system.
+// One row per (user, org) pair so a user can have different prefs per org.
+export const alertPreferences = pgTable("alert_preferences", {
+  id: text("id").primaryKey(), // UUID
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  cadence: text("cadence").default("weekly").notNull(), // "immediate" | "daily" | "weekly" | "off"
+  emailEnabled: boolean("email_enabled").default(true).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_alert_prefs_user_org").on(table.userId, table.orgId),
+]);
+
+// Alerts — actual alert events fired by the signal detection service in Phase 4.
+// Decision-framed: the decisionText is the headline ("→ land acquisition needed")
+// and the supporting data lives in payloadJson with full source traceability.
+export const alerts = pgTable("alerts", {
+  id: text("id").primaryKey(), // UUID
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  geographyId: text("geography_id").references(() => geographies.id),
+  alertType: text("alert_type").notNull(), // see Phase 4 alert types
+  severity: text("severity").default("info").notNull(), // "info" | "warning" | "critical"
+  decisionText: text("decision_text").notNull(),
+  payloadJson: json("payload_json"),
+  acknowledgedBy: text("acknowledged_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_alerts_org").on(table.orgId),
+  index("idx_alerts_org_created").on(table.orgId, table.createdAt),
+]);
+
+// Audit log — every settings change, every flag, every business case save
+// for board-defense compliance. CEO requirement section 5.2.
+export const auditLog = pgTable("audit_log", {
+  id: text("id").primaryKey(), // UUID
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  userId: text("user_id").references(() => users.id),
+  action: text("action").notNull(), // e.g. "tracked_market.added", "weights.updated"
+  entityType: text("entity_type"),
+  entityId: text("entity_id"),
+  beforeJson: json("before_json"),
+  afterJson: json("after_json"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_log_org_created").on(table.orgId, table.createdAt),
+]);
 
 // ─── Cached Narratives ───────────────────────────────────────────
 //
@@ -521,6 +707,7 @@ export const opsSnapshotLog = pgTable("ops_snapshot_log", {
 
 // ─── Type Exports ────────────────────────────────────────────────
 
+// v1 surviving (federal data + ops mirror)
 export type Geography = typeof geographies.$inferSelect;
 export type PermitData = typeof permitData.$inferSelect;
 export type EmploymentData = typeof employmentData.$inferSelect;
@@ -528,5 +715,18 @@ export type MigrationData = typeof migrationData.$inferSelect;
 export type IncomeData = typeof incomeData.$inferSelect;
 export type TradeCapacityData = typeof tradeCapacityData.$inferSelect;
 export type OccupationData = typeof occupationData.$inferSelect;
-export type User = typeof users.$inferSelect;
 export type FetchLog = typeof fetchLogs.$inferSelect;
+
+// v2 multi-tenant foundation
+export type Org = typeof orgs.$inferSelect;
+export type User = typeof users.$inferSelect;
+export type OrgMembership = typeof orgMemberships.$inferSelect;
+export type TrackedMarket = typeof trackedMarkets.$inferSelect;
+export type WatchlistMarket = typeof watchlistMarkets.$inferSelect;
+export type HealthScoreWeights = typeof healthScoreWeights.$inferSelect;
+export type Flag = typeof flags.$inferSelect;
+export type BusinessCase = typeof businessCases.$inferSelect;
+export type AlertPreference = typeof alertPreferences.$inferSelect;
+export type Alert = typeof alerts.$inferSelect;
+export type AuditLog = typeof auditLog.$inferSelect;
+export type OrgRole = (typeof orgRole.enumValues)[number];
