@@ -2,7 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
 const COOKIE_NAME = "ss_session";
-const PUBLIC_PATHS = ["/sign-in", "/api/auth/login", "/api/auth/logout", "/api/cron/"];
+const PUBLIC_PATHS = [
+  "/sign-in",
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/cron/",
+  // Snapshot status endpoint is read-only and exposes only timestamps + a
+  // boolean. The daily self-heal GitHub Actions workflow polls it without
+  // a session cookie to decide whether the StrategemOps snapshot needs a
+  // retry. Keeping it public lets the workflow stay simple.
+  "/api/ops-snapshot-status",
+];
 
 function getSecret() {
   const secret = process.env.ADMIN_SESSION_SECRET || "dev-secret";
