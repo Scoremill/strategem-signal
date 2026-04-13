@@ -191,84 +191,14 @@ export const constructionSpending = pgTable(
 );
 
 // ─── Computed Scores ─────────────────────────────────────────────
-
-// Demand scores — blended demand index per MSA per period
-export const demandScores = pgTable(
-  "demand_scores",
-  {
-    id: text("id").primaryKey(),
-    geographyId: text("geography_id").notNull().references(() => geographies.id),
-    scoreDate: date("score_date").notNull(),
-    permitScore: decimal("permit_score", { precision: 5, scale: 2 }),
-    employmentScore: decimal("employment_score", { precision: 5, scale: 2 }),
-    migrationScore: decimal("migration_score", { precision: 5, scale: 2 }),
-    incomeScore: decimal("income_score", { precision: 5, scale: 2 }),
-    startsScore: decimal("starts_score", { precision: 5, scale: 2 }),
-    demandIndex: decimal("demand_index", { precision: 6, scale: 2 }).notNull(),
-    computedAt: timestamp("computed_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("idx_demand_geo_date").on(table.geographyId, table.scoreDate),
-  ]
-);
-
-// Capacity scores — blended capacity index per MSA per period
-export const capacityScores = pgTable(
-  "capacity_scores",
-  {
-    id: text("id").primaryKey(),
-    geographyId: text("geography_id").notNull().references(() => geographies.id),
-    scoreDate: date("score_date").notNull(),
-    tradeEmploymentScore: decimal("trade_employment_score", { precision: 5, scale: 2 }),
-    wageAccelerationScore: decimal("wage_acceleration_score", { precision: 5, scale: 2 }),
-    establishmentScore: decimal("establishment_score", { precision: 5, scale: 2 }),
-    permitsPerWorkerScore: decimal("permits_per_worker_score", { precision: 5, scale: 2 }),
-    dollarsPerWorkerScore: decimal("dollars_per_worker_score", { precision: 5, scale: 2 }),
-    capacityIndex: decimal("capacity_index", { precision: 6, scale: 2 }).notNull(),
-    computedAt: timestamp("computed_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("idx_capacity_geo_date").on(table.geographyId, table.scoreDate),
-  ]
-);
-
-// Master demand-capacity scores — the core metric table
-export const demandCapacityScores = pgTable(
-  "demand_capacity_scores",
-  {
-    id: text("id").primaryKey(),
-    geographyId: text("geography_id").notNull().references(() => geographies.id),
-    scoreDate: date("score_date").notNull(),
-    demandIndex: decimal("demand_index", { precision: 6, scale: 2 }).notNull(),
-    capacityIndex: decimal("capacity_index", { precision: 6, scale: 2 }).notNull(),
-    demandCapacityRatio: decimal("demand_capacity_ratio", { precision: 8, scale: 3 }).notNull(),
-    // Status: "constrained" (>1.15), "equilibrium" (0.85-1.15), "favorable" (<0.85)
-    status: text("status").notNull(),
-    // Velocity — rate of change over time windows
-    velocity3mDemand: decimal("velocity_3m_demand", { precision: 6, scale: 2 }),
-    velocity6mDemand: decimal("velocity_6m_demand", { precision: 6, scale: 2 }),
-    velocity12mDemand: decimal("velocity_12m_demand", { precision: 6, scale: 2 }),
-    velocity3mCapacity: decimal("velocity_3m_capacity", { precision: 6, scale: 2 }),
-    velocity6mCapacity: decimal("velocity_6m_capacity", { precision: 6, scale: 2 }),
-    velocity12mCapacity: decimal("velocity_12m_capacity", { precision: 6, scale: 2 }),
-    velocity3mRatio: decimal("velocity_3m_ratio", { precision: 6, scale: 3 }),
-    velocity6mRatio: decimal("velocity_6m_ratio", { precision: 6, scale: 3 }),
-    velocity12mRatio: decimal("velocity_12m_ratio", { precision: 6, scale: 3 }),
-    // Trade Availability: workers per permit adjusted for wage pressure
-    tradeAvailability: decimal("trade_availability", { precision: 8, scale: 2 }),
-    // Estimated Monthly Starts: derived from permit volume × regional conversion factor
-    estMonthlyStarts: integer("est_monthly_starts"),
-    // Percentile rankings across all MSAs
-    demandPercentileRank: decimal("demand_percentile_rank", { precision: 5, scale: 2 }),
-    capacityPercentileRank: decimal("capacity_percentile_rank", { precision: 5, scale: 2 }),
-    ratioPercentileRank: decimal("ratio_percentile_rank", { precision: 5, scale: 2 }),
-    computedAt: timestamp("computed_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("idx_dc_geo_date").on(table.geographyId, table.scoreDate),
-    index("idx_dc_status").on(table.status),
-  ]
-);
+//
+// Removed in v2 Phase 0.7: demand_scores, capacity_scores, demand_capacity_scores.
+// The v1 composite Demand-Capacity Ratio was the wrong analytical model
+// (collapses six independent filters into one number; hides which filter
+// is failing). Phase 2 of v2 replaces it with per-filter scoring against
+// the six CEO requirement filters, each carrying its own 0-100 score
+// and a clickable source-traceability drill-down. The corresponding
+// database tables get DROPped in Phase 0.8.
 
 // ─── Users & Auth ────────────────────────────────────────────────
 
@@ -284,22 +214,13 @@ export const users = pgTable("users", {
 });
 
 // ─── Cached Narratives ───────────────────────────────────────────
-
-export const narratives = pgTable(
-  "narratives",
-  {
-    id: text("id").primaryKey(),
-    type: text("type").notNull(), // "market", "portfolio", "capacity"
-    geographyId: text("geography_id"), // null for portfolio-level
-    fullNarrative: text("full_narrative"), // long version
-    snippet: text("snippet"), // short version (for popups)
-    metadata: text("metadata"), // JSON — topPicks, watchList, implications, etc.
-    generatedAt: timestamp("generated_at").defaultNow().notNull(),
-  },
-  (table) => [
-    index("idx_narratives_type_geo").on(table.type, table.geographyId),
-  ]
-);
+//
+// Removed in v2 Phase 0.7. The v1 narratives table held LLM-generated
+// market and portfolio summaries that synthesized the composite scoring
+// without exposing the underlying reasoning chain. That contradicts the
+// CEO requirement that every insight be traceable to its source data.
+// Phase 4 of v2 rebuilds AI commentary with full source attribution per
+// claim. The corresponding database table gets DROPped in Phase 0.8.
 
 // ─── Pipeline Logs ───────────────────────────────────────────────
 
@@ -607,6 +528,5 @@ export type MigrationData = typeof migrationData.$inferSelect;
 export type IncomeData = typeof incomeData.$inferSelect;
 export type TradeCapacityData = typeof tradeCapacityData.$inferSelect;
 export type OccupationData = typeof occupationData.$inferSelect;
-export type DemandCapacityScore = typeof demandCapacityScores.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type FetchLog = typeof fetchLogs.$inferSelect;

@@ -1,55 +1,32 @@
-import { db } from "@/lib/db";
-import {
-  fetchLogs,
-  permitData,
-  employmentData,
-  migrationData,
-  tradeCapacityData,
-  demandCapacityScores,
-} from "@/lib/db/schema";
-import { desc, sql } from "drizzle-orm";
-import AdminClient from "./AdminClient";
-
+/**
+ * Admin placeholder.
+ *
+ * The v1 admin page exposed manual triggers for the demand/capacity/scoring/
+ * narratives pipelines plus a CSV export. Several of those pipelines were
+ * removed in the v2 wipe (composite scoring, narratives, the old export
+ * shape) and the surviving federal pipelines are still triggered by the
+ * GitHub Actions cron workflows.
+ *
+ * Phase 0.13 rebuilds this surface as the multi-tenant org settings UI:
+ *   - Org details, logo, members, role assignment
+ *   - Tracked market list (which MSAs the org watches)
+ *   - Health score weighting (Financial / Demand / Operational sliders)
+ *   - Stripe subscription management
+ *   - Snapshot freshness indicator (StrategemOps mirror health)
+ */
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
-  const logs = await db
-    .select()
-    .from(fetchLogs)
-    .orderBy(desc(fetchLogs.runAt))
-    .limit(20);
-
-  // Get data counts
-  const [permits] = await db.select({ count: sql<number>`count(*)` }).from(permitData);
-  const [employment] = await db.select({ count: sql<number>`count(*)` }).from(employmentData);
-  const [population] = await db.select({ count: sql<number>`count(*)` }).from(migrationData);
-  const [capacity] = await db.select({ count: sql<number>`count(*)` }).from(tradeCapacityData);
-  const [scores] = await db.select({ count: sql<number>`count(*)` }).from(demandCapacityScores);
-
+export default function AdminPlaceholder() {
   return (
-    <div className="p-4 sm:p-8">
-      <div className="mb-8">
+    <div className="h-full flex items-center justify-center p-8">
+      <div className="max-w-md text-center">
         <h1 className="text-2xl font-bold text-[#1E293B]">Admin</h1>
-        <p className="text-sm text-[#6B7280] mt-1">
-          Pipeline health, manual triggers, and capacity alerts
+        <p className="mt-3 text-sm text-[#6B7280]">
+          The admin surface is being rebuilt as the multi-tenant org settings
+          UI in Phase 0.13. Federal data pipelines continue to refresh on
+          their GitHub Actions cron schedules in the meantime.
         </p>
       </div>
-
-      <AdminClient
-        logs={logs.map((l) => ({
-          ...l,
-          runAt: l.runAt.toISOString(),
-          recordsFetched: l.recordsFetched ?? 0,
-          recordsNew: l.recordsNew ?? 0,
-        }))}
-        dataCounts={{
-          permits: Number(permits.count),
-          employment: Number(employment.count),
-          population: Number(population.count),
-          capacity: Number(capacity.count),
-          scores: Number(scores.count),
-        }}
-      />
     </div>
   );
 }
