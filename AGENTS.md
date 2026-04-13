@@ -4,6 +4,25 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+# Which branch are you on?
+
+StrategemSignal is mid-rebuild. Two branches are live:
+
+- **`main`** = v1 (composite Demand-Capacity Ratio app). Deployed to
+  production. Bug fixes and urgent customer issues land here.
+- **`v2`** = v2 (CEO Strategic Market Intelligence Platform). The new
+  product, built from a clean slate. All rebuild work happens here.
+
+Run `git branch --show-current` and confirm before making changes.
+The two branches have different schemas, different tables, different
+auth flows, and different analytical models. **Mixing them is a source
+of real damage.** If you're not sure which branch the user wants you on,
+ask. If you started on the wrong branch, stop and switch — don't try to
+port half of one product into the other.
+
+PLAN.md (in the workspace root, not this repo) has the v2 phased build
+plan. CLAUDE.md (in this repo) has the v2 stack and architecture.
+
 # Multi-tenant data access (v2)
 
 StrategemSignal v2 is a multi-tenant SaaS. Every database table that holds
