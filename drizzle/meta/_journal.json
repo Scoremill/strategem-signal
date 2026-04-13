@@ -8,6 +8,13 @@
       "when": 1775942718455,
       "tag": "0000_sad_dexter_bennett",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776053645650,
+      "tag": "0001_v2_ops_mirror_tables",
+      "breakpoints": true
     }
   ]
 }
