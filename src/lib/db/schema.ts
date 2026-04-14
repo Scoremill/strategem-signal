@@ -415,6 +415,32 @@ export const auditLog = pgTable("audit_log", {
   index("idx_audit_log_org_created").on(table.orgId, table.createdAt),
 ]);
 
+// ─── FHFA House Price Index ──────────────────────────────────────
+//
+// Quarterly home price index from the Federal Housing Finance Agency.
+// One row per (geography, year, quarter). The HPI is a 1975-base
+// index — a value of 300 means prices have tripled since 1975 in that
+// metro. Used by:
+//   - Phase 2 Filter 5 (Affordability Runway) — HPI vs income growth
+//   - Phase 3 Organic Entry Model — directional land basis estimate
+//
+// Populated by the monthly FHFA cron and backfilled 2023Q1-2025Q4 via
+// scripts/backfill-fhfa.ts. FHFA publishes quarterly ~1 quarter after
+// quarter-end.
+export const fhfaHpi = pgTable("fhfa_hpi", {
+  id: text("id").primaryKey(), // UUID
+  geographyId: text("geography_id").notNull().references(() => geographies.id, { onDelete: "cascade" }),
+  year: integer("year").notNull(),
+  quarter: integer("quarter").notNull(), // 1-4
+  hpi: decimal("hpi", { precision: 8, scale: 2 }).notNull(),
+  hpiYoyChangePct: decimal("hpi_yoy_change_pct", { precision: 6, scale: 2 }),
+  source: text("source").default("fhfa_metro").notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_fhfa_hpi_geo_period").on(table.geographyId, table.year, table.quarter),
+  index("idx_fhfa_hpi_geo").on(table.geographyId),
+]);
+
 // ─── Portfolio Health Snapshots ──────────────────────────────────
 //
 // The output of the Phase 1.2 scoring service: one row per market per

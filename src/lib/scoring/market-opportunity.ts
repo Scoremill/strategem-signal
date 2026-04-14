@@ -63,9 +63,13 @@ export interface MarketOpportunityInputs {
   // No inputs today. The scorer always returns null and the drilldown
   // shows a "data pending" placeholder.
 
-  // Filter 5 — Affordability Runway (STUB for Phase 2 ship)
-  // No inputs today. The scorer always returns null and the drilldown
-  // shows a "data pending" placeholder.
+  // Filter 5 — Affordability Runway
+  // HPI trajectory vs income trajectory. The scorer compares income
+  // growth to home price growth — a positive delta means runway is
+  // expanding (incomes outrunning prices), negative means it's
+  // compressing (prices outrunning incomes).
+  hpiYoyPct: SourceTrace;
+  incomeYoyPct: SourceTrace;
 
   // Filter 6 — Operational Feasibility
   qcewWageYoyPct: SourceTrace;
@@ -224,19 +228,64 @@ function scoreCompetitive(_inputs: MarketOpportunityInputs): FilterScore {
   return pack(null, "data_pending");
 }
 
-// ─── Filter 5 — Affordability Runway (STUB) ─────────────────────
+// ─── Filter 5 — Affordability Runway ────────────────────────────
 
 /**
- * Stubbed for the Phase 2 ship. The filter needs FHFA House Price Index
- * data (metro-level HPI + our existing ACS income) that we have NOT
- * built a pipeline for yet. Drew's explicit instruction: stub this
- * filter rather than block the Phase 2 ship on a new federal pipeline.
+ * Score the gap between income growth and home price growth. Classic
+ * affordability measures (price-to-income ratio) require a dollar home
+ * price, which FHFA HPI doesn't give us directly — it's an index, not
+ * a price. So instead of measuring "is this market affordable today,"
+ * the filter measures "is affordability getting better or worse?" —
+ * which is the 5-year CEO horizon lens anyway.
  *
- * FHFA pipeline is on the roadmap for pre-Phase-3 (business case engine
- * needs the same data). See CLAUDE agent memory "FHFA Deferred".
+ * Two components:
+ *   - Trajectory (70% weight): incomeYoyPct - hpiYoyPct. Positive =
+ *     incomes outrunning prices, runway expanding. Normalized on
+ *     [-4, +4] (a 4-point-per-year trajectory gap is extreme in either
+ *     direction).
+ *   - Price stability (30% weight): HPI YoY itself on an inverse-U
+ *     curve. Modest growth (2-6%) is healthy; flat or negative signals
+ *     cooling/correction; very high (10%+) signals bubble risk.
+ *     Peak at 4%.
+ *
+ * A market where incomes grow 5% and HPI grows 3% scores high on
+ * trajectory (runway expanding 2pp/year) and moderate on stability
+ * (HPI near the sweet spot). A market where HPI grows 10% while
+ * incomes grow 3% scores low on both.
  */
-function scoreAffordability(_inputs: MarketOpportunityInputs): FilterScore {
-  return pack(null, "data_pending");
+function scoreAffordability(inputs: MarketOpportunityInputs): FilterScore {
+  const hpi = inputs.hpiYoyPct.value;
+  const income = inputs.incomeYoyPct.value;
+  if (hpi == null && income == null) return pack(null);
+
+  // Trajectory: normalize (income - hpi) on [-4, +4]
+  let trajectoryScore: number | null = null;
+  if (hpi != null && income != null) {
+    const delta = income - hpi;
+    trajectoryScore = normalize(delta, -4, 4);
+  }
+
+  // Stability: inverse-U on HPI YoY, peak at 4%
+  let stabilityScore: number | null = null;
+  if (hpi != null) {
+    const distanceFromPeak = Math.abs(hpi - 4);
+    // 0 distance → 100, 6 or more distance → 0, linear between
+    stabilityScore = Math.max(0, 100 - (distanceFromPeak / 6) * 100);
+  }
+
+  // Weighted blend — 70% trajectory, 30% stability. Null-aware:
+  // if only one component is present, it carries the full weight.
+  const parts: Array<[number, number]> = [];
+  if (trajectoryScore != null) parts.push([trajectoryScore, 0.7]);
+  if (stabilityScore != null) parts.push([stabilityScore, 0.3]);
+  if (parts.length === 0) return pack(null);
+  let sum = 0;
+  let wsum = 0;
+  for (const [s, w] of parts) {
+    sum += s * w;
+    wsum += w;
+  }
+  return pack(sum / wsum);
 }
 
 // ─── Filter 6 — Operational Feasibility ─────────────────────────
@@ -302,6 +351,8 @@ export function emptyMarketOpportunityInputs(): MarketOpportunityInputs {
     sectorEmployment: { ...empty },
     permitsYoyPct: { ...empty },
     populationChangePct: { ...empty },
+    hpiYoyPct: { ...empty },
+    incomeYoyPct: { ...empty },
     qcewWageYoyPct: { ...empty },
     qcewEmploymentYoyPct: { ...empty },
   };
@@ -364,8 +415,8 @@ export const FILTER_META: FilterMeta[] = [
     n: 5,
     label: "Affordability Runway",
     shortLabel: "Affordability",
-    description: "Median home price vs median household income, with FHFA House Price Index as the price trajectory input.",
-    isStub: true,
+    description: "Income growth vs FHFA House Price Index growth. Rewards markets where incomes are outrunning home prices (runway expanding) and penalizes markets with price bubbles or flat/negative HPI.",
+    isStub: false,
     columnKey: "filter5",
   },
   {

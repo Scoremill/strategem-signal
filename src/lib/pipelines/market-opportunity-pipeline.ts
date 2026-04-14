@@ -23,6 +23,8 @@ import {
   geographies,
   permitData,
   migrationData,
+  incomeData,
+  fhfaHpi,
   marketOpportunityScores,
 } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
@@ -379,17 +381,58 @@ function parseCsvLine(line: string): string[] {
 
 // ─── Main pipeline ──────────────────────────────────────────────
 
+/**
+ * Load the latest FHFA HPI YoY for Filter 5 affordability.
+ */
+async function loadHpiYoy(geographyId: string): Promise<SourceTrace> {
+  const rows = await db
+    .select()
+    .from(fhfaHpi)
+    .where(eq(fhfaHpi.geographyId, geographyId))
+    .orderBy(desc(fhfaHpi.year), desc(fhfaHpi.quarter))
+    .limit(1);
+  if (rows.length === 0) return trace(null, "fhfa_metro", "");
+  const row = rows[0];
+  return trace(
+    toNumber(row.hpiYoyChangePct),
+    "fhfa_metro",
+    `${row.year}-Q${row.quarter}`
+  );
+}
+
+/**
+ * Load the latest median household income YoY for Filter 5 affordability.
+ */
+async function loadIncomeYoy(geographyId: string): Promise<SourceTrace> {
+  const rows = await db
+    .select()
+    .from(incomeData)
+    .where(eq(incomeData.geographyId, geographyId))
+    .orderBy(desc(incomeData.year))
+    .limit(1);
+  if (rows.length === 0) return trace(null, "census_acs", "");
+  const row = rows[0];
+  return trace(
+    toNumber(row.yoyChangePct),
+    "census_acs",
+    String(row.year)
+  );
+}
+
 async function loadInputsForMarket(
   geographyId: string,
   cbsaFips: string,
   qtr: { year: number; quarter: number } | null
 ): Promise<MarketOpportunityInputs> {
-  const [permitsYoy, migration, operational, sectorData] = await Promise.all([
-    loadPermitsYoy(geographyId),
-    loadMigration(geographyId),
-    loadOperationalFromQcew(geographyId),
-    fetchSectorBreakdown(cbsaFips, qtr),
-  ]);
+  const [permitsYoy, migration, operational, sectorData, hpiYoy, incomeYoy] =
+    await Promise.all([
+      loadPermitsYoy(geographyId),
+      loadMigration(geographyId),
+      loadOperationalFromQcew(geographyId),
+      fetchSectorBreakdown(cbsaFips, qtr),
+      loadHpiYoy(geographyId),
+      loadIncomeYoy(geographyId),
+    ]);
 
   const inputs = emptyMarketOpportunityInputs();
   inputs.permitsYoyPct = permitsYoy;
@@ -399,6 +442,8 @@ async function loadInputsForMarket(
   inputs.populationChangePct = migration.populationChangePct;
   inputs.qcewWageYoyPct = operational.wageYoy;
   inputs.qcewEmploymentYoyPct = operational.employmentYoy;
+  inputs.hpiYoyPct = hpiYoy;
+  inputs.incomeYoyPct = incomeYoy;
   inputs.sectorEmployment = {
     value: sectorData ? Object.values(sectorData.breakdown).reduce((a, b) => a + b, 0) : null,
     source: "bls_qcew",
