@@ -40,19 +40,15 @@ export default function MyMarketsSection({
     return false;
   }, [selectedIds, initiallySelectedIds]);
 
-  // Order: selected first (alphabetical), then unselected (by population desc),
-  // then apply the search filter on top of that ordering.
+  // Alphabetical by city name — FIXED ordering. We deliberately do not
+  // re-sort when the user toggles a checkbox because the re-sort
+  // physically moves the row they just clicked and pushes scroll
+  // position back to the top of the list, which is a terrible
+  // experience when picking through 52+ markets. The "N selected"
+  // badge in the header gives at-a-glance feedback instead.
   const orderedMarkets = useMemo(() => {
-    const selected: MarketOption[] = [];
-    const unselected: MarketOption[] = [];
-    for (const m of allMarkets) {
-      if (selectedIds.has(m.id)) selected.push(m);
-      else unselected.push(m);
-    }
-    selected.sort((a, b) => a.shortName.localeCompare(b.shortName));
-    unselected.sort((a, b) => (b.population ?? 0) - (a.population ?? 0));
-    return [...selected, ...unselected];
-  }, [allMarkets, selectedIds]);
+    return [...allMarkets].sort((a, b) => a.shortName.localeCompare(b.shortName));
+  }, [allMarkets]);
 
   const filteredMarkets = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -76,6 +72,19 @@ export default function MyMarketsSection({
 
   function clearAll() {
     setSelectedIds(new Set());
+    setFeedback(null);
+  }
+
+  function selectAll() {
+    // Select every market currently visible under the search filter.
+    // If the user has "seattle" in the search box and clicks Select All,
+    // they get the Seattle match selected, not all 52 — that's the
+    // intuitive read of "select all [visible]".
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const m of filteredMarkets) next.add(m.id);
+      return next;
+    });
     setFeedback(null);
   }
 
@@ -135,6 +144,13 @@ export default function MyMarketsSection({
             className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 text-[#1E293B] placeholder:text-[#9CA3AF]"
           />
         </div>
+        <button
+          type="button"
+          onClick={selectAll}
+          className="px-3 py-2.5 text-[11px] font-medium text-[#6B7280] hover:text-[#1E293B] hover:bg-gray-50 rounded-lg transition-colors flex-shrink-0"
+        >
+          Select all
+        </button>
         {selectedIds.size > 0 && (
           <button
             type="button"
