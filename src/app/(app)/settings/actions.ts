@@ -2,9 +2,14 @@
 
 import { getSession } from "@/lib/auth";
 import { db, tenantQuery } from "@/lib/db";
-import { trackedMarkets, healthScoreWeights } from "@/lib/db/schema";
+import {
+  trackedMarkets,
+  healthScoreWeights,
+  watchlistMarkets,
+} from "@/lib/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "crypto";
 import {
   WEIGHT_PRESETS,
   type PresetName,
@@ -126,4 +131,51 @@ export async function saveWeightPreset(presetName: string) {
 
   revalidatePath("/settings");
   return { ok: true as const, preset: preset.name };
+}
+
+/**
+ * Add or remove a market from the logged-in user's personal watchlist.
+ * Called from the star button on each row in /opportunities. Per-user
+ * scoped (same model as tracked_markets and health_score_weights), so
+ * a user's watchlist is independent of their teammates'.
+ */
+export async function toggleWatchlistMarket(
+  geographyId: string,
+  desired: boolean
+) {
+  const session = await getSession();
+  if (!session) {
+    return { ok: false as const, error: "Not signed in" };
+  }
+  if (typeof geographyId !== "string" || geographyId.length === 0) {
+    return { ok: false as const, error: "Invalid geographyId" };
+  }
+
+  if (desired) {
+    // Add. ON CONFLICT DO NOTHING keeps the call idempotent — a double-
+    // click on the star button shouldn't throw.
+    await db
+      .insert(watchlistMarkets)
+      .values({
+        id: randomUUID(),
+        orgId: session.orgId,
+        userId: session.userId,
+        geographyId,
+      })
+      .onConflictDoNothing();
+  } else {
+    // Remove. Scoped to the user + geography so we can't accidentally
+    // remove another user's watchlist entry.
+    await db
+      .delete(watchlistMarkets)
+      .where(
+        and(
+          eq(watchlistMarkets.userId, session.userId),
+          eq(watchlistMarkets.geographyId, geographyId)
+        )
+      );
+  }
+
+  revalidatePath("/opportunities");
+  return { ok: true as const, onWatchlist: desired };
 }

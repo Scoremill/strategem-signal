@@ -294,17 +294,21 @@ export const trackedMarkets = pgTable("tracked_markets", {
   index("idx_tracked_markets_org").on(table.orgId),
 ]);
 
-// Watchlist markets — MSAs an org is considering but hasn't tracked yet.
-// Phase 2 Market Opportunity screen surfaces these as candidates.
+// Watchlist markets — each user's PERSONAL flagged markets from the
+// Phase 2 /opportunities screen. Same per-user model as tracked_markets:
+// a CEO and a CFO in the same org each manage their own watchlist. org_id
+// is retained so the row cascades with the org, but uniqueness and
+// ownership live at the user level.
 export const watchlistMarkets = pgTable("watchlist_markets", {
   id: text("id").primaryKey(), // UUID
   orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   geographyId: text("geography_id").notNull().references(() => geographies.id),
-  addedBy: text("added_by").references(() => users.id),
   notes: text("notes"),
   addedAt: timestamp("added_at").defaultNow().notNull(),
 }, (table) => [
-  uniqueIndex("idx_watchlist_markets_org_geo").on(table.orgId, table.geographyId),
+  uniqueIndex("idx_watchlist_markets_user_geo").on(table.userId, table.geographyId),
+  index("idx_watchlist_markets_user").on(table.userId),
   index("idx_watchlist_markets_org").on(table.orgId),
 ]);
 
