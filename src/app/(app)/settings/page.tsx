@@ -1,29 +1,25 @@
 /**
- * Org settings shell.
+ * Org + personal settings shell.
  *
- * Placeholder for the multi-tenant org settings UI. Phase 1 fills the
- * sections in with real functionality:
+ * Phase 1.1 lit up the first real section: My Markets — every user manages
+ * their own MSA filter that drives the Portfolio Health View. The remaining
+ * sections (Org Profile, Members, Weighting, Subscription, Audit Log) are
+ * still placeholders.
  *
- *   - Org Profile: name, slug, logo
- *   - Members: invite, role assignment, remove
- *   - Tracked Markets: which MSAs the org actively monitors
- *   - Health Score Weighting: Financial / Demand / Operational sliders
- *   - Subscription: Stripe portal link (after launch)
- *   - Audit Log: chronological list of every settings change
- *
- * For Phase 0.13 we just render the chrome and the labeled section
- * placeholders so the route exists, the sidebar entry works, and the
- * owner-only gate is testable.
+ * The owner-only gate now applies only to org-level configuration. Per-user
+ * sections like My Markets are visible and editable to every signed-in user
+ * regardless of role.
  */
 import { getSession } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { orgs } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { db, tenantQuery } from "@/lib/db";
+import { orgs, geographies, trackedMarkets } from "@/lib/db/schema";
+import { eq, asc } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import MyMarketsSection, { type MarketOption } from "./MyMarketsSection";
 
 export const dynamic = "force-dynamic";
 
-const PLACEHOLDER_SECTIONS: Array<{
+const ORG_PLACEHOLDER_SECTIONS: Array<{
   title: string;
   description: string;
   status: string;
@@ -39,13 +35,8 @@ const PLACEHOLDER_SECTIONS: Array<{
     status: "Coming in Phase 1",
   },
   {
-    title: "My Markets",
-    description: "Your personal MSA filter. Every user picks the markets they care about; the Portfolio Health View scores only the markets in your filter. No shared org-wide list — you and your teammates each manage your own.",
-    status: "Coming in Phase 1",
-  },
-  {
     title: "Health Score Weighting",
-    description: "Tune the composite Portfolio Health score across Financial, Demand, and Operational sub-scores. Stored per-org.",
+    description: "Tune the composite Portfolio Health score across Financial, Demand, and Operational sub-scores. Stored per user in Phase 1.3.",
     status: "Coming in Phase 1",
   },
   {
@@ -69,19 +60,46 @@ export default async function SettingsPage() {
     redirect("/sign-in");
   }
 
-  // Owner-only gate. Superadmin (env-var backstop) always passes.
+  // Owner-only gate applies to org-level config (the placeholder cards).
+  // Per-user sections like My Markets are open to everyone.
   const isOwner = session.role === "owner" || session.isSuperadmin === true;
 
   // Look up the org name for display. The session carries orgSlug but not
   // the human name; one tiny query gets the rest.
   const [activeOrg] = await db.select().from(orgs).where(eq(orgs.id, session.orgId)).limit(1);
 
+  // All MSAs for the picker, plus the current user's selected ids.
+  const allGeoRows = await db
+    .select({
+      id: geographies.id,
+      shortName: geographies.shortName,
+      state: geographies.state,
+      population: geographies.population,
+    })
+    .from(geographies)
+    .where(eq(geographies.isActive, true))
+    .orderBy(asc(geographies.shortName));
+
+  const allMarkets: MarketOption[] = allGeoRows.map((g) => ({
+    id: g.id,
+    shortName: g.shortName,
+    state: g.state,
+    population: g.population,
+  }));
+
+  const t = tenantQuery(session.orgId);
+  const userTrackedRows = (await t.select(
+    trackedMarkets,
+    eq(trackedMarkets.userId, session.userId)
+  )) as Array<{ geographyId: string }>;
+  const initiallySelectedIds = userTrackedRows.map((r) => r.geographyId);
+
   return (
     <div className="p-4 sm:p-8 max-w-4xl">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#1E293B]">Settings</h1>
         <p className="text-sm text-[#6B7280] mt-1">
-          Configure your organization, manage members, and tune the platform.
+          Configure your personal filter and your organization.
         </p>
       </div>
 
@@ -111,17 +129,26 @@ export default async function SettingsPage() {
         </div>
       </div>
 
+      {/* My Markets — personal filter, open to every user regardless of role */}
+      <div className="mb-6">
+        <MyMarketsSection
+          allMarkets={allMarkets}
+          initiallySelectedIds={initiallySelectedIds}
+        />
+      </div>
+
+      {/* Org-level configuration — placeholders, gated to owners */}
       {!isOwner ? (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-amber-900">
-          <p className="font-semibold">Settings is restricted to organization owners</p>
+          <p className="font-semibold">Organization configuration is restricted to owners</p>
           <p className="text-sm mt-1">
             Your role in this organization is <strong className="capitalize">{session.role.replace(/_/g, " ")}</strong>.
-            Contact your org owner if you need to change configuration.
+            Contact your org owner if you need to change org-wide settings. (Your personal market filter above is yours to manage.)
           </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {PLACEHOLDER_SECTIONS.map((section) => (
+          {ORG_PLACEHOLDER_SECTIONS.map((section) => (
             <div
               key={section.title}
               className="bg-white rounded-xl border border-gray-200 p-5 flex items-center justify-between gap-4"
