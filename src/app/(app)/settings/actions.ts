@@ -1,10 +1,14 @@
 "use server";
 
 import { getSession } from "@/lib/auth";
-import { tenantQuery } from "@/lib/db";
-import { trackedMarkets } from "@/lib/db/schema";
+import { db, tenantQuery } from "@/lib/db";
+import { trackedMarkets, healthScoreWeights } from "@/lib/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import {
+  WEIGHT_PRESETS,
+  type PresetName,
+} from "@/lib/scoring/weight-presets";
 
 /**
  * Persist a user's personal market filter.
@@ -73,4 +77,53 @@ export async function saveTrackedMarkets(geographyIds: string[]) {
     removed: toRemoveRowIds.length,
     total: desired.length,
   };
+}
+
+/**
+ * Save the user's chosen weighting preset. The three sub-scores live in
+ * portfolio_health_snapshots; the preset determines how they blend into
+ * the composite the user sees in the heatmap and ranking table. No
+ * pipeline re-run is needed — the composite is re-computed client-side
+ * on read.
+ *
+ * Stored in health_score_weights keyed on (user_id, org_id) so a user
+ * can have a different preference in each org they belong to.
+ */
+export async function saveWeightPreset(presetName: string) {
+  const session = await getSession();
+  if (!session) {
+    return { ok: false as const, error: "Not signed in" };
+  }
+
+  const preset = WEIGHT_PRESETS[presetName as PresetName];
+  if (!preset) {
+    return { ok: false as const, error: `Unknown preset: ${presetName}` };
+  }
+
+  // Cross-tenant table with composite PK — tenantQuery helper doesn't
+  // cover composite PKs cleanly, so we go through the raw db client and
+  // constrain by both user_id and org_id in the WHERE clause.
+  await db
+    .insert(healthScoreWeights)
+    .values({
+      userId: session.userId,
+      orgId: session.orgId,
+      weightFinancial: preset.weights.financial.toFixed(3),
+      weightDemand: preset.weights.demand.toFixed(3),
+      weightOperational: preset.weights.operational.toFixed(3),
+      presetName: preset.name,
+    })
+    .onConflictDoUpdate({
+      target: [healthScoreWeights.userId, healthScoreWeights.orgId],
+      set: {
+        weightFinancial: preset.weights.financial.toFixed(3),
+        weightDemand: preset.weights.demand.toFixed(3),
+        weightOperational: preset.weights.operational.toFixed(3),
+        presetName: preset.name,
+        updatedAt: new Date(),
+      },
+    });
+
+  revalidatePath("/settings");
+  return { ok: true as const, preset: preset.name };
 }

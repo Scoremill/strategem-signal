@@ -308,17 +308,24 @@ export const watchlistMarkets = pgTable("watchlist_markets", {
   index("idx_watchlist_markets_org").on(table.orgId),
 ]);
 
-// Health score weighting — per-org tuning of the composite Portfolio Health
-// score. The three sub-scores must sum to 1.0 (enforced in app code).
-// Phase 1's adjustable slider UI writes to this table.
+// Health score weighting — per-USER tuning of the composite Portfolio Health
+// score. Each user in an org picks their own weighting profile (a CEO may
+// weight affordability heavily while a COO prioritizes operational feasibility
+// in the same market). The three weights must sum to 1.0, enforced in app
+// code. Phase 1.3 exposes four preset profiles rather than free sliders to
+// keep the UI simple; the column layout still supports arbitrary weights
+// in case we add a custom option later.
 export const healthScoreWeights = pgTable("health_score_weights", {
-  orgId: text("org_id").primaryKey().references(() => orgs.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
   weightFinancial: decimal("weight_financial", { precision: 4, scale: 3 }).default("0.400").notNull(),
   weightDemand: decimal("weight_demand", { precision: 4, scale: 3 }).default("0.300").notNull(),
   weightOperational: decimal("weight_operational", { precision: 4, scale: 3 }).default("0.300").notNull(),
-  updatedBy: text("updated_by").references(() => users.id),
+  presetName: text("preset_name").default("balanced").notNull(), // "balanced" | "demand" | "affordability" | "operational"
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.orgId] }),
+]);
 
 // Flags — markets a user has flagged with a personal note for follow-up.
 // Org-scoped so other org members can see the same flags.

@@ -12,10 +12,12 @@
  */
 import { getSession } from "@/lib/auth";
 import { db, tenantQuery } from "@/lib/db";
-import { orgs, geographies, trackedMarkets } from "@/lib/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { orgs, geographies, trackedMarkets, healthScoreWeights } from "@/lib/db/schema";
+import { and, eq, asc } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import MyMarketsSection, { type MarketOption } from "./MyMarketsSection";
+import WeightingSection from "./WeightingSection";
+import { resolvePreset, type PresetName } from "@/lib/scoring/weight-presets";
 
 export const dynamic = "force-dynamic";
 
@@ -32,11 +34,6 @@ const ORG_PLACEHOLDER_SECTIONS: Array<{
   {
     title: "Members",
     description: "Invite users, assign roles (CEO, CFO, COO, Division President, Member), or remove access.",
-    status: "Coming in Phase 1",
-  },
-  {
-    title: "Health Score Weighting",
-    description: "Tune the composite Portfolio Health score across Financial, Demand, and Operational sub-scores. Stored per user in Phase 1.3.",
     status: "Coming in Phase 1",
   },
   {
@@ -94,6 +91,21 @@ export default async function SettingsPage() {
   )) as Array<{ geographyId: string }>;
   const initiallySelectedIds = userTrackedRows.map((r) => r.geographyId);
 
+  // Resolve the user's weighting preset. health_score_weights has a
+  // composite PK (user_id, org_id), so we query through the raw client
+  // with both filters explicit rather than through tenantQuery.
+  const [weightRow] = await db
+    .select()
+    .from(healthScoreWeights)
+    .where(
+      and(
+        eq(healthScoreWeights.userId, session.userId),
+        eq(healthScoreWeights.orgId, session.orgId)
+      )
+    )
+    .limit(1);
+  const initialPreset = resolvePreset(weightRow?.presetName).name as PresetName;
+
   return (
     <div className="p-4 sm:p-8 max-w-4xl">
       <div className="mb-8">
@@ -135,6 +147,11 @@ export default async function SettingsPage() {
           allMarkets={allMarkets}
           initiallySelectedIds={initiallySelectedIds}
         />
+      </div>
+
+      {/* Weighting — personal composite blend, open to every user */}
+      <div className="mb-6">
+        <WeightingSection initialPreset={initialPreset} />
       </div>
 
       {/* Org-level configuration — placeholders, gated to owners */}
