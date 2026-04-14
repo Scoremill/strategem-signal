@@ -447,6 +447,50 @@ export const portfolioHealthSnapshots = pgTable("portfolio_health_snapshots", {
   index("idx_portfolio_health_date").on(table.snapshotDate),
 ]);
 
+// ─── Market Opportunity Scores (Phase 2 Six-Filter Scan) ────────
+//
+// One row per market per snapshot run. Written by the monthly cron at
+// /api/cron/market-opportunity, read by the /opportunities screen.
+// Shared across all tenants: the six-filter scores for a market are
+// identical regardless of who's looking at them.
+//
+// The six filters come from CEO requirement section 2.2:
+//   1. Migration Tailwinds        (Census PEP net domestic migration)
+//   2. Employment Diversity       (BLS QCEW sector HHI)
+//   3. Supply-Demand Imbalance    (permits YoY vs population growth)
+//   4. Competitive Landscape      (STUB — StrategemOps lacks builder→market)
+//   5. Affordability Runway       (STUB — FHFA HPI pipeline not built yet)
+//   6. Operational Feasibility    (BLS QCEW construction wages + trade
+//                                  employment trajectory, same math as
+//                                  Phase 1's Operational sub-score)
+//
+// num_green counts how many of the six filters scored >= 60 (the
+// heatmap's emerald-600 threshold). all_six_green is the headline
+// flag from the PLAN.md deliverable. Both are useful for sorting the
+// /opportunities table even while the two stubbed filters are null.
+//
+// inputsJson carries every raw input fed into each filter with its
+// source and as-of date, for the filter drilldown pages.
+export const marketOpportunityScores = pgTable("market_opportunity_scores", {
+  id: text("id").primaryKey(), // UUID
+  geographyId: text("geography_id").notNull().references(() => geographies.id, { onDelete: "cascade" }),
+  snapshotDate: date("snapshot_date").notNull(),
+  filter1Migration: decimal("filter_1_migration", { precision: 5, scale: 2 }),
+  filter2Diversity: decimal("filter_2_diversity", { precision: 5, scale: 2 }),
+  filter3Imbalance: decimal("filter_3_imbalance", { precision: 5, scale: 2 }),
+  filter4Competitive: decimal("filter_4_competitive", { precision: 5, scale: 2 }), // STUB
+  filter5Affordability: decimal("filter_5_affordability", { precision: 5, scale: 2 }), // STUB
+  filter6Operational: decimal("filter_6_operational", { precision: 5, scale: 2 }),
+  numGreen: integer("num_green").notNull().default(0),
+  allSixGreen: boolean("all_six_green").notNull().default(false),
+  inputsJson: json("inputs_json"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_market_opp_geo_date").on(table.geographyId, table.snapshotDate),
+  index("idx_market_opp_date").on(table.snapshotDate),
+  index("idx_market_opp_num_green").on(table.numGreen),
+]);
+
 // ─── Cached Narratives ───────────────────────────────────────────
 //
 // Removed in v2 Phase 0.7. The v1 narratives table held LLM-generated
