@@ -39,8 +39,8 @@ const PLACEHOLDER_SECTIONS: Array<{
     status: "Coming in Phase 1",
   },
   {
-    title: "Tracked Markets",
-    description: "The MSAs your organization actively monitors. Phase 1 Portfolio Health View only scores markets in this list.",
+    title: "My Markets",
+    description: "Your personal MSA filter. Every user picks the markets they care about; the Portfolio Health View scores only the markets in your filter. No shared org-wide list — you and your teammates each manage your own.",
     status: "Coming in Phase 1",
   },
   {

@@ -54,7 +54,12 @@ CREATE TABLE "org_memberships" (
 CREATE UNIQUE INDEX "idx_org_memberships_user_org" ON "org_memberships" ("user_id", "org_id");--> statement-breakpoint
 CREATE INDEX "idx_org_memberships_org" ON "org_memberships" ("org_id");--> statement-breakpoint
 
--- Tracked markets — actively monitored MSAs per org
+-- Tracked markets — actively monitored MSAs per org.
+-- NOTE: Phase 1.0 (migration 0003) converts this to a per-USER filter:
+-- adds user_id NOT NULL, drops added_by, moves uniqueness to (user_id,
+-- geography_id). This original block reflects the pre-1.0 shape for
+-- historical accuracy — see 0003_tracked_markets_user_scoped.sql for
+-- the current shape.
 CREATE TABLE "tracked_markets" (
   "id" text PRIMARY KEY NOT NULL,
   "org_id" text NOT NULL REFERENCES "orgs"("id") ON DELETE CASCADE,

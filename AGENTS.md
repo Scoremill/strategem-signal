@@ -70,6 +70,28 @@ Background jobs that legitimately need cross-tenant access:
 If you use raw `db` on a tenant-scoped table, **leave a code comment
 explaining why** so the next reviewer knows it was intentional.
 
+## Per-user vs org-shared tenant tables
+
+Most tenant-scoped tables are org-shared: `flags`, `business_cases`,
+`alerts`, `audit_log`, `org_memberships` — everyone in the org sees the
+same rows. But a few hold **per-user** state inside the org:
+
+- `tracked_markets` — each user's personal MSA filter. Unique index is
+  `(user_id, geography_id)`, NOT `(org_id, geography_id)`. A CEO, CFO,
+  and Division President in the same org each manage their own filter.
+- `alert_preferences` — per-user delivery cadence (`user_id, org_id`).
+- `health_score_weights` — planned to move to per-user in Phase 1.3.
+
+For these tables, filtering by `org_id` is necessary but not sufficient.
+Callers must also filter by `user_id` when showing a user their own
+state. The tenantQuery helper still applies the org filter automatically;
+the user filter is the caller's responsibility:
+
+```ts
+// ✅ correct — org filter auto-applied, user filter explicit
+const rows = await t.select(trackedMarkets, eq(trackedMarkets.userId, ctx.userId));
+```
+
 ## Special case: the `users` table
 
 `users` holds identity, not org membership. A user can belong to multiple

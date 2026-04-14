@@ -276,16 +276,21 @@ export const orgMemberships = pgTable("org_memberships", {
   index("idx_org_memberships_org").on(table.orgId),
 ]);
 
-// Tracked markets — the MSAs an org has chosen to actively monitor.
-// Phase 1 Portfolio Health View only scores markets in this list for the org.
+// Tracked markets — each user's PERSONAL filter of MSAs they care about.
+// Not a shared org-wide list. A CEO, a CFO, and a Division President working
+// in the same org each manage their own filter; the Portfolio Health View
+// scores only the markets in the current user's filter. org_id is retained
+// so the row cascades with the org and participates in the tenantQuery
+// isolation layer, but the uniqueness and ownership live at the user level.
 export const trackedMarkets = pgTable("tracked_markets", {
   id: text("id").primaryKey(), // UUID
   orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   geographyId: text("geography_id").notNull().references(() => geographies.id),
-  addedBy: text("added_by").references(() => users.id),
   addedAt: timestamp("added_at").defaultNow().notNull(),
 }, (table) => [
-  uniqueIndex("idx_tracked_markets_org_geo").on(table.orgId, table.geographyId),
+  uniqueIndex("idx_tracked_markets_user_geo").on(table.userId, table.geographyId),
+  index("idx_tracked_markets_user").on(table.userId),
   index("idx_tracked_markets_org").on(table.orgId),
 ]);
 
