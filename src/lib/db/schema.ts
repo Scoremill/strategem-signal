@@ -404,6 +404,42 @@ export const auditLog = pgTable("audit_log", {
   index("idx_audit_log_org_created").on(table.orgId, table.createdAt),
 ]);
 
+// ─── Portfolio Health Snapshots ──────────────────────────────────
+//
+// The output of the Phase 1.2 scoring service: one row per market per
+// snapshot run. Written by the monthly cron at /api/cron/portfolio-health
+// and read by the Portfolio Health View (heatmap + ranking table).
+//
+// Shared across all tenants: the snapshot isn't scoped to an org because
+// the score for a given market is identical regardless of who's looking
+// at it. Per-user weighting in 1.3 re-blends the three stored sub-scores
+// client-side — the server only computes and stores the raw sub-scores.
+//
+// Three sub-scores:
+//   - financial: affordability runway (ACS income vs wage growth)
+//   - demand: permits YoY + employment growth + net migration + unemployment
+//   - operational: QCEW construction wages + trade employment trajectory
+// All three are external-only in Phase 1; no internal StrategemOps data
+// feeds the composite (see CLAUDE.md "external-only" decision).
+//
+// inputsJson carries every raw input that fed the score with its source
+// and as-of date, so the drilldown "View Sources" modal in 1.6 can show
+// full traceability per the CEO requirement.
+export const portfolioHealthSnapshots = pgTable("portfolio_health_snapshots", {
+  id: text("id").primaryKey(), // UUID
+  geographyId: text("geography_id").notNull().references(() => geographies.id, { onDelete: "cascade" }),
+  snapshotDate: date("snapshot_date").notNull(), // date the cron ran
+  financialScore: decimal("financial_score", { precision: 5, scale: 2 }), // 0-100
+  demandScore: decimal("demand_score", { precision: 5, scale: 2 }), // 0-100
+  operationalScore: decimal("operational_score", { precision: 5, scale: 2 }), // 0-100
+  compositeScore: decimal("composite_score", { precision: 5, scale: 2 }), // 0-100 at default 40/30/30 weights
+  inputsJson: json("inputs_json"), // raw inputs + per-input source trace
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_portfolio_health_geo_date").on(table.geographyId, table.snapshotDate),
+  index("idx_portfolio_health_date").on(table.snapshotDate),
+]);
+
 // ─── Cached Narratives ───────────────────────────────────────────
 //
 // Removed in v2 Phase 0.7. The v1 narratives table held LLM-generated
