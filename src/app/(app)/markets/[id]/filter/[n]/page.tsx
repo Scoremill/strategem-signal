@@ -144,14 +144,14 @@ function scoreForFilter(
 }
 
 interface PageProps {
-  params: Promise<{ market: string; n: string }>;
+  params: Promise<{ id: string; n: string }>;
 }
 
 export default async function FilterDrilldownPage({ params }: PageProps) {
   const session = await getSession();
   if (!session) redirect("/sign-in");
 
-  const { market: marketId, n: nParam } = await params;
+  const { id: marketId, n: nParam } = await params;
   const n = parseInt(nParam, 10);
   if (![1, 2, 3, 4, 5, 6].includes(n)) notFound();
   const meta: FilterMeta | undefined = FILTER_META.find((f) => f.n === n);
@@ -185,8 +185,8 @@ export default async function FilterDrilldownPage({ params }: PageProps) {
     <div className="p-4 sm:p-8 max-w-4xl">
       {/* Breadcrumb / back link */}
       <div className="mb-4 flex items-center gap-2 text-xs text-[#6B7280]">
-        <Link href="/opportunities" className="hover:text-[#1E293B] transition-colors">
-          ← Opportunities
+        <Link href="/markets" className="hover:text-[#1E293B] transition-colors">
+          ← Markets
         </Link>
         <span>·</span>
         <Link href={`/markets/${market.id}`} className="hover:text-[#1E293B] transition-colors">
