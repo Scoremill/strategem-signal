@@ -123,7 +123,7 @@ export default function WeightingSection({ initialPreset }: WeightingSectionProp
           type="button"
           onClick={handleSave}
           disabled={!isDirty || isPending}
-          className="px-4 py-2 text-sm font-medium rounded-lg bg-[#F97316] text-white hover:bg-[#EA580C] disabled:bg-gray-200 disabled:text-[#9CA3AF] disabled:cursor-not-allowed transition-colors flex-shrink-0"
+          className="px-4 py-2.5 text-sm font-medium rounded-lg bg-[#F97316] text-white hover:bg-[#EA580C] disabled:bg-gray-200 disabled:text-[#9CA3AF] disabled:cursor-not-allowed transition-colors flex-shrink-0"
         >
           {isPending ? "Saving…" : "Save"}
         </button>

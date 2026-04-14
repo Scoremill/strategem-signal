@@ -113,7 +113,7 @@ export default function RankingTableClient({ rows, preset }: RankingTableClientP
               key={r.id}
               className={`hover:bg-orange-50/30 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}
             >
-              <td className="py-3 px-5 text-left">
+              <td className="py-3 px-3 sm:px-5 text-left">
                 <Link
                   href={`/markets/${r.id}`}
                   className="text-sm font-medium text-[#1E293B] hover:text-[#EA580C] transition-colors"
@@ -121,22 +121,22 @@ export default function RankingTableClient({ rows, preset }: RankingTableClientP
                   {r.shortName}
                 </Link>
               </td>
-              <td className="py-3 px-5 text-left text-[11px] text-[#6B7280]">
+              <td className="py-3 px-3 sm:px-5 text-left text-[11px] text-[#6B7280]">
                 {r.state}
               </td>
-              <td className={`py-3 px-5 text-right text-base tabular-nums ${compositeBandClass(r.composite)}`}>
+              <td className={`py-3 px-3 sm:px-5 text-right text-base tabular-nums ${compositeBandClass(r.composite)}`}>
                 {r.composite != null ? r.composite.toFixed(0) : "—"}
               </td>
-              <td className={`py-3 px-5 text-right text-sm ${subScoreCellClass(r.financial)}`}>
+              <td className={`py-3 px-3 sm:px-5 text-right text-sm ${subScoreCellClass(r.financial)}`}>
                 {r.financial != null ? r.financial.toFixed(0) : "—"}
               </td>
-              <td className={`py-3 px-5 text-right text-sm ${subScoreCellClass(r.demand)}`}>
+              <td className={`py-3 px-3 sm:px-5 text-right text-sm ${subScoreCellClass(r.demand)}`}>
                 {r.demand != null ? r.demand.toFixed(0) : "—"}
               </td>
-              <td className={`py-3 px-5 text-right text-sm ${subScoreCellClass(r.operational)}`}>
+              <td className={`py-3 px-3 sm:px-5 text-right text-sm ${subScoreCellClass(r.operational)}`}>
                 {r.operational != null ? r.operational.toFixed(0) : "—"}
               </td>
-              <td className="py-3 px-5 text-right text-[11px] text-[#6B7280] tabular-nums">
+              <td className="py-3 px-3 sm:px-5 text-right text-[11px] text-[#6B7280] tabular-nums">
                 {r.snapshotDate ?? "—"}
               </td>
             </tr>

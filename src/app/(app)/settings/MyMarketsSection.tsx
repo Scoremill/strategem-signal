@@ -132,14 +132,14 @@ export default function MyMarketsSection({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by city or state…"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 text-[#1E293B] placeholder:text-[#9CA3AF]"
+            className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 text-[#1E293B] placeholder:text-[#9CA3AF]"
           />
         </div>
         {selectedIds.size > 0 && (
           <button
             type="button"
             onClick={clearAll}
-            className="px-3 py-2 text-[11px] font-medium text-[#6B7280] hover:text-[#1E293B] hover:bg-gray-50 rounded-lg transition-colors flex-shrink-0"
+            className="px-3 py-2.5 text-[11px] font-medium text-[#6B7280] hover:text-[#1E293B] hover:bg-gray-50 rounded-lg transition-colors flex-shrink-0"
           >
             Clear all
           </button>
@@ -157,7 +157,7 @@ export default function MyMarketsSection({
             return (
               <label
                 key={m.id}
-                className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${
+                className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
                   isSelected ? "bg-orange-50 hover:bg-orange-100" : "hover:bg-gray-50"
                 }`}
               >
@@ -165,7 +165,7 @@ export default function MyMarketsSection({
                   type="checkbox"
                   checked={isSelected}
                   onChange={() => toggle(m.id)}
-                  className="h-4 w-4 rounded border-gray-300 text-[#F97316] focus:ring-orange-200 focus:ring-2"
+                  className="h-5 w-5 rounded border-gray-300 text-[#F97316] focus:ring-orange-200 focus:ring-2"
                 />
                 <div className="flex-1 min-w-0 flex items-baseline gap-2">
                   <span className="text-sm font-medium text-[#1E293B] truncate">
@@ -200,7 +200,7 @@ export default function MyMarketsSection({
           type="button"
           onClick={handleSave}
           disabled={!isDirty || isPending}
-          className="px-4 py-2 text-sm font-medium rounded-lg bg-[#F97316] text-white hover:bg-[#EA580C] disabled:bg-gray-200 disabled:text-[#9CA3AF] disabled:cursor-not-allowed transition-colors flex-shrink-0"
+          className="px-4 py-2.5 text-sm font-medium rounded-lg bg-[#F97316] text-white hover:bg-[#EA580C] disabled:bg-gray-200 disabled:text-[#9CA3AF] disabled:cursor-not-allowed transition-colors flex-shrink-0"
         >
           {isPending ? "Saving…" : "Save"}
         </button>

@@ -74,7 +74,7 @@ export default function SortableTable({
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={`py-3 px-5 font-medium text-[#6B7280] ${alignClass(col.align)} ${
+                className={`py-3 px-3 sm:px-5 font-medium text-[#6B7280] ${alignClass(col.align)} ${
                   col.sortable !== false ? "cursor-pointer select-none hover:text-[#1E293B] transition-colors" : ""
                 }`}
                 onClick={() => col.sortable !== false && handleSort(col.key)}

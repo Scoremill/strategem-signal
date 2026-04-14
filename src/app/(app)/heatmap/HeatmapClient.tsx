@@ -200,7 +200,7 @@ export default function HeatmapClient({
   return (
     <div className="relative h-full">
       {/* Legend */}
-      <div className="absolute bottom-6 left-4 z-10 bg-white rounded-lg shadow-lg border border-gray-200 px-5 py-4">
+      <div className="absolute bottom-10 left-4 z-10 bg-white rounded-lg shadow-lg border border-gray-200 px-5 py-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-[#1E293B] mb-3">
           Portfolio Health Score
         </p>
