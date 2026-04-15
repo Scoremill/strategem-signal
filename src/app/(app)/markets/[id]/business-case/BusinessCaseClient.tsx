@@ -11,6 +11,7 @@
  * overkill for a single-page stateful view like this one.
  */
 import { useMemo, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { computeOrganicEntry } from "@/lib/business-case/organic-entry-model";
 import {
@@ -19,6 +20,8 @@ import {
 } from "@/lib/business-case/acquisition-entry-model";
 import { DEFAULT_INPUTS } from "@/lib/business-case/types";
 import { saveBusinessCase } from "./actions";
+import BusinessCasePdfTemplate from "./BusinessCasePdfTemplate";
+import { exportElementToPdf } from "./exportPdf";
 import type {
   AcquisitionOutput,
   AcquisitionTarget,
@@ -89,6 +92,8 @@ export default function BusinessCaseClient({
   const [saveNotes, setSaveNotes] = useState("");
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [isSaving, startSave] = useTransition();
+  const [pdfMounted, setPdfMounted] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const organic = useMemo(() => computeOrganicEntry(rawOrganic, inputs), [
     rawOrganic,
@@ -149,6 +154,31 @@ export default function BusinessCaseClient({
     setSaveOpen(true);
   }
 
+  async function handleExportPdf() {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    setPdfMounted(true);
+    try {
+      // Let React flush the hidden template into the DOM before we
+      // rasterize. Two RAFs is more reliable than a single setTimeout.
+      await new Promise<void>((r) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => r()));
+      });
+      const safeMarket = marketLabel.replace(/[^a-zA-Z0-9]+/g, "-");
+      const date = new Date().toISOString().slice(0, 10);
+      await exportElementToPdf(
+        "business-case-pdf-template",
+        `StrategemSignal-${safeMarket}-${date}.pdf`
+      );
+    } catch (err) {
+      console.error("PDF export failed", err);
+      alert("PDF export failed. See console for details.");
+    } finally {
+      setPdfMounted(false);
+      setPdfBusy(false);
+    }
+  }
+
   function handleSave() {
     setSaveMsg(null);
     startSave(async () => {
@@ -183,12 +213,21 @@ export default function BusinessCaseClient({
             rationale={rec.rationale}
           />
         </div>
-        <button
-          onClick={openSaveDialog}
-          className="shrink-0 rounded-lg bg-[#F97316] hover:bg-[#EA580C] px-4 py-2 text-xs font-semibold text-white transition-colors"
-        >
-          Save case
-        </button>
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            onClick={handleExportPdf}
+            disabled={pdfBusy}
+            className="rounded-lg border border-[#F97316] bg-white hover:bg-[#FFF7ED] disabled:opacity-50 disabled:cursor-wait px-4 py-2 text-xs font-semibold text-[#F97316] transition-colors"
+          >
+            {pdfBusy ? "Generating…" : "Export PDF"}
+          </button>
+          <button
+            onClick={openSaveDialog}
+            className="rounded-lg bg-[#F97316] hover:bg-[#EA580C] px-4 py-2 text-xs font-semibold text-white transition-colors"
+          >
+            Save case
+          </button>
+        </div>
       </div>
 
       {/* Save dialog */}
@@ -278,6 +317,33 @@ export default function BusinessCaseClient({
           <WarningsPanel organic={organic} acquisition={acquisition} />
         </div>
       </div>
+
+      {/*
+        Hidden PDF template — portalled directly into <body> so it
+        escapes the Tailwind cascade (Tailwind v4's oklch() colors
+        would otherwise poison html2canvas via inherited `color` on
+        unstyled child elements). Only mounted while the user is
+        exporting.
+      */}
+      {pdfMounted &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <BusinessCasePdfTemplate
+            id="business-case-pdf-template"
+            marketLabel={marketLabel}
+            inputs={inputs}
+            organic={organic}
+            acquisition={acquisition}
+            recommendation={rec.recommendation}
+            rationale={rec.rationale}
+            generatedAt={new Date().toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          />,
+          document.body
+        )}
     </>
   );
 }
