@@ -351,19 +351,51 @@ export const flags = pgTable("flags", {
 // Each case is a JSON blob with the inputs, the computed outputs, and the
 // recommendation. Stored as JSON because the schema will evolve fast in
 // Phase 3 and we don't want a migration per shape change.
+/**
+ * Saved business cases from the Phase 3 Business Case Engine.
+ *
+ * Each row represents one CEO-led entry analysis for a specific
+ * market: inputs the user dialed in, outputs from BOTH the Organic
+ * Entry Model and the Acquisition Entry Model, plus an advisory
+ * recommendation chip. The engine always computes both paths so the
+ * CEO can compare side-by-side; they pick the direction, the chip
+ * is advisory only.
+ *
+ * Per-user scoped (same pattern as tracked_markets, weighting presets,
+ * watchlist_markets). Org_id is retained for cascade delete when an
+ * org is removed and for the future "share with teammates" feature.
+ */
 export const businessCases = pgTable("business_cases", {
   id: text("id").primaryKey(), // UUID
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
   geographyId: text("geography_id").notNull().references(() => geographies.id),
-  caseType: text("case_type").notNull(), // "organic" | "acquisition"
   title: text("title").notNull(),
+  notes: text("notes"),
+  /**
+   * User-adjustable assumptions for both models — land share, land mix
+   * (pct finished/raw/optioned), build cost multiplier, absorption pace
+   * multiplier, acquisition multiple range, etc. Shape documented in
+   * src/lib/business-case/types.ts.
+   */
   inputsJson: json("inputs_json"),
-  outputsJson: json("outputs_json"),
-  recommendation: text("recommendation"), // "go" | "hold" | "pass"
-  createdBy: text("created_by").notNull().references(() => users.id),
+  /** Output of the Organic Entry Model — capital, timeline, ROIC. */
+  organicOutputsJson: json("organic_outputs_json"),
+  /** Output of the Acquisition Entry Model — target list, multiples. */
+  acquisitionOutputsJson: json("acquisition_outputs_json"),
+  /** Advisory chip shown at the top of the case: go organic / go
+   *  acquisition / pass. Computed from the two outputs; never a
+   *  hard-coded value. Preserved as stored so the saved case can
+   *  be reopened without recomputing. */
+  recommendation: text("recommendation"), // "organic" | "acquisition" | "pass"
+  /** If true, other members of the org can view this case. Phase 3.7
+   *  wires the share flow; default is private. */
+  shared: boolean("shared").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
+  index("idx_business_cases_user").on(table.userId),
+  index("idx_business_cases_geo").on(table.geographyId),
   index("idx_business_cases_org").on(table.orgId),
 ]);
 
