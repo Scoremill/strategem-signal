@@ -59,6 +59,8 @@ export default async function BusinessCasePage({ params }: PageProps) {
         </p>
       </div>
       <BusinessCaseClient
+        geographyId={market.id}
+        marketLabel={`${market.shortName}, ${market.state}`}
         rawOrganic={raw.organic}
         acquisitionTargets={raw.acquisitionTargets}
       />

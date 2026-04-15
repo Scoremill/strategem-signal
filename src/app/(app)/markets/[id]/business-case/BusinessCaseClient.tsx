@@ -10,13 +10,15 @@
  * inside useMemo whenever inputs change. Recoil/Zustand/etc. are
  * overkill for a single-page stateful view like this one.
  */
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { computeOrganicEntry } from "@/lib/business-case/organic-entry-model";
 import {
   computeAcquisitionEntry,
   recommendEntryPath,
 } from "@/lib/business-case/acquisition-entry-model";
 import { DEFAULT_INPUTS } from "@/lib/business-case/types";
+import { saveBusinessCase } from "./actions";
 import type {
   AcquisitionOutput,
   AcquisitionTarget,
@@ -29,6 +31,8 @@ import type { OrganicRawInputs } from "@/lib/business-case/organic-entry-model";
 // ─── Props ────────────────────────────────────────────────────────
 
 interface Props {
+  geographyId: string;
+  marketLabel: string;
   rawOrganic: OrganicRawInputs;
   acquisitionTargets: AcquisitionTarget[];
 }
@@ -72,11 +76,19 @@ function fmtRoic(n: number | null): string {
 // ─── Component ────────────────────────────────────────────────────
 
 export default function BusinessCaseClient({
+  geographyId,
+  marketLabel,
   rawOrganic,
   acquisitionTargets,
 }: Props) {
+  const router = useRouter();
   const [inputs, setInputs] = useState<BusinessCaseInputs>(DEFAULT_INPUTS);
   const [acquisitionMultiple, setAcquisitionMultiple] = useState<number>(2.5);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveTitle, setSaveTitle] = useState("");
+  const [saveNotes, setSaveNotes] = useState("");
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [isSaving, startSave] = useTransition();
 
   const organic = useMemo(() => computeOrganicEntry(rawOrganic, inputs), [
     rawOrganic,
@@ -127,13 +139,121 @@ export default function BusinessCaseClient({
     setAcquisitionMultiple(2.5);
   }
 
+  function openSaveDialog() {
+    // Seed a sensible default title so the CEO doesn't have to type one
+    const date = new Date().toISOString().slice(0, 10);
+    const defaultTitle = `${marketLabel} — ${inputs.landSharePct}% land, ${inputs.landMix.pctFinished}/${inputs.landMix.pctRaw}/${inputs.landMix.pctOptioned} mix (${date})`;
+    setSaveTitle(defaultTitle);
+    setSaveNotes("");
+    setSaveMsg(null);
+    setSaveOpen(true);
+  }
+
+  function handleSave() {
+    setSaveMsg(null);
+    startSave(async () => {
+      const result = await saveBusinessCase({
+        geographyId,
+        title: saveTitle,
+        notes: saveNotes || null,
+        inputs,
+        organic,
+        acquisition,
+        recommendation: rec.recommendation,
+      });
+      if (result.ok) {
+        setSaveMsg("Saved.");
+        setTimeout(() => {
+          setSaveOpen(false);
+          router.refresh();
+        }, 600);
+      } else {
+        setSaveMsg(result.error);
+      }
+    });
+  }
+
   return (
     <>
-      {/* Recommendation chip */}
-      <RecommendationBanner
-        recommendation={rec.recommendation}
-        rationale={rec.rationale}
-      />
+      {/* Recommendation chip + save button */}
+      <div className="mb-6 flex items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <RecommendationBanner
+            recommendation={rec.recommendation}
+            rationale={rec.rationale}
+          />
+        </div>
+        <button
+          onClick={openSaveDialog}
+          className="shrink-0 rounded-lg bg-[#F97316] hover:bg-[#EA580C] px-4 py-2 text-xs font-semibold text-white transition-colors"
+        >
+          Save case
+        </button>
+      </div>
+
+      {/* Save dialog */}
+      {saveOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setSaveOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-[#1E293B] mb-1">Save business case</h3>
+            <p className="text-xs text-[#6B7280] mb-4">
+              Saves the current inputs and results to your library so you can
+              revisit the scenario or share it with peers in your org.
+            </p>
+            <label className="block text-xs font-semibold text-[#1E293B] mb-1">
+              Title
+            </label>
+            <input
+              type="text"
+              value={saveTitle}
+              onChange={(e) => setSaveTitle(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#F97316] focus:outline-none focus:ring-2 focus:ring-[#FFF7ED]"
+              placeholder="e.g. Atlanta — 30% land aggressive optioned"
+            />
+            <label className="block text-xs font-semibold text-[#1E293B] mt-4 mb-1">
+              Notes <span className="font-normal text-[#6B7280]">(optional)</span>
+            </label>
+            <textarea
+              value={saveNotes}
+              onChange={(e) => setSaveNotes(e.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#F97316] focus:outline-none focus:ring-2 focus:ring-[#FFF7ED]"
+              placeholder="Why this scenario matters…"
+            />
+            {saveMsg && (
+              <p
+                className={`mt-3 text-xs ${
+                  saveMsg === "Saved." ? "text-[#10B981]" : "text-[#EF4444]"
+                }`}
+              >
+                {saveMsg}
+              </p>
+            )}
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setSaveOpen(false)}
+                disabled={isSaving}
+                className="rounded-lg px-3 py-2 text-xs font-semibold text-[#6B7280] hover:text-[#1E293B] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving || !saveTitle.trim()}
+                className="rounded-lg bg-[#F97316] hover:bg-[#EA580C] disabled:bg-gray-300 px-4 py-2 text-xs font-semibold text-white transition-colors"
+              >
+                {isSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Controls + results side-by-side on wide screens */}
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 mb-6">
@@ -410,7 +530,7 @@ function RecommendationBanner({
       ? "text-[#1E3A5F]"
       : "text-[#991B1B]";
   return (
-    <div className={`mb-6 rounded-xl border-l-4 ${bg} p-5`}>
+    <div className={`rounded-xl border-l-4 ${bg} p-5`}>
       <div className="flex items-start gap-4">
         <div
           className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${textColor} bg-white/60`}
