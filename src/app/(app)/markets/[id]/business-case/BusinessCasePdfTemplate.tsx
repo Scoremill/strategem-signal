@@ -16,6 +16,7 @@ import type {
   OrganicOutput,
   Recommendation,
 } from "@/lib/business-case/types";
+import type { MarketHealthBundle } from "./BusinessCaseClient";
 
 interface Props {
   id: string;
@@ -25,6 +26,7 @@ interface Props {
   acquisition: AcquisitionOutput;
   recommendation: Recommendation;
   rationale: string;
+  marketHealth: MarketHealthBundle | null;
   generatedAt: string;
   userName?: string | null;
 }
@@ -81,6 +83,7 @@ export default function BusinessCasePdfTemplate({
   acquisition,
   recommendation,
   rationale,
+  marketHealth,
   generatedAt,
   userName,
 }: Props) {
@@ -219,6 +222,11 @@ export default function BusinessCasePdfTemplate({
           <div style={{ fontSize: 11, lineHeight: 1.5 }}>{rationale}</div>
         </div>
       </div>
+
+      {/* Market Health section — sub-scores + blurb + top raw inputs */}
+      {marketHealth && (
+        <MarketHealthSection health={marketHealth} />
+      )}
 
       {/* Assumptions strip */}
       <SectionLabel>Market Assumptions</SectionLabel>
@@ -674,5 +682,326 @@ function Td({
     >
       {children}
     </td>
+  );
+}
+
+// ── Market Health section ────────────────────────────────────────
+
+/**
+ * Color ramp that matches the heatmap and drilldown page. Lets the
+ * score tiles read at a glance — red for distress, orange for
+ * borderline, yellow for neutral, light green for good, dark green
+ * for strong.
+ */
+function scoreColor(score: number | null): string {
+  if (score == null) return "#9CA3AF";
+  if (score >= 65) return "#16A34A";
+  if (score >= 55) return "#22C55E";
+  if (score >= 45) return "#EAB308";
+  if (score >= 35) return "#F97316";
+  return "#DC2626";
+}
+
+interface SourceTrace {
+  value: number | null;
+  source: string;
+  asOf: string;
+}
+
+interface PortfolioHealthInputsJson {
+  permitsYoyPct?: SourceTrace;
+  employmentYoyPct?: SourceTrace;
+  unemploymentRate?: SourceTrace;
+  populationChangePct?: SourceTrace;
+  netDomesticMigration?: SourceTrace;
+  medianHouseholdIncome?: SourceTrace;
+  incomeYoyPct?: SourceTrace;
+  qcewWageYoyPct?: SourceTrace;
+  qcewEmploymentYoyPct?: SourceTrace;
+}
+
+function fmtInput(
+  value: number | null,
+  unit: "pct" | "dollars" | "count" | "rate"
+): string {
+  if (value == null) return "—";
+  if (unit === "pct") {
+    const sign = value > 0 ? "+" : "";
+    return `${sign}${value.toFixed(1)}%`;
+  }
+  if (unit === "rate") return `${value.toFixed(1)}%`;
+  if (unit === "dollars") return `$${Math.round(value).toLocaleString()}`;
+  return Math.round(value).toLocaleString();
+}
+
+function MarketHealthSection({
+  health,
+}: {
+  health: import("./BusinessCaseClient").MarketHealthBundle;
+}) {
+  const inputs = (health.inputsJson ?? {}) as PortfolioHealthInputsJson;
+
+  // Group the raw inputs for the compact per-sub-score table
+  const rows: Array<{
+    group: "Financial" | "Demand" | "Operational";
+    label: string;
+    trace: SourceTrace | undefined;
+    unit: "pct" | "dollars" | "count" | "rate";
+    sourceLabel: string;
+  }> = [
+    {
+      group: "Financial",
+      label: "Median household income",
+      trace: inputs.medianHouseholdIncome,
+      unit: "dollars",
+      sourceLabel: "Census ACS",
+    },
+    {
+      group: "Financial",
+      label: "Income YoY",
+      trace: inputs.incomeYoyPct,
+      unit: "pct",
+      sourceLabel: "Census ACS",
+    },
+    {
+      group: "Demand",
+      label: "Single-family permits YoY",
+      trace: inputs.permitsYoyPct,
+      unit: "pct",
+      sourceLabel: "Census BPS",
+    },
+    {
+      group: "Demand",
+      label: "Nonfarm employment YoY",
+      trace: inputs.employmentYoyPct,
+      unit: "pct",
+      sourceLabel: "BLS CES",
+    },
+    {
+      group: "Demand",
+      label: "Unemployment rate",
+      trace: inputs.unemploymentRate,
+      unit: "rate",
+      sourceLabel: "BLS LAUS",
+    },
+    {
+      group: "Demand",
+      label: "Population change YoY",
+      trace: inputs.populationChangePct,
+      unit: "pct",
+      sourceLabel: "Census PEP",
+    },
+    {
+      group: "Demand",
+      label: "Net domestic migration",
+      trace: inputs.netDomesticMigration,
+      unit: "count",
+      sourceLabel: "Census PEP",
+    },
+    {
+      group: "Operational",
+      label: "Construction wage YoY",
+      trace: inputs.qcewWageYoyPct,
+      unit: "pct",
+      sourceLabel: "BLS QCEW",
+    },
+    {
+      group: "Operational",
+      label: "Construction employment YoY",
+      trace: inputs.qcewEmploymentYoyPct,
+      unit: "pct",
+      sourceLabel: "BLS QCEW",
+    },
+  ];
+
+  const financialRows = rows.filter((r) => r.group === "Financial");
+  const demandRows = rows.filter((r) => r.group === "Demand");
+  const operationalRows = rows.filter((r) => r.group === "Operational");
+
+  return (
+    <>
+      <SectionLabel>
+        Market Health · {health.presetName} preset · as of{" "}
+        {health.snapshotDate}
+      </SectionLabel>
+
+      {/* Three sub-score tiles */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 12,
+          marginBottom: 12,
+        }}
+      >
+        <ScoreTile
+          label="Financial"
+          sublabel={`Weight ${Math.round(health.weights.financial * 100)}%`}
+          score={health.financialScore}
+        />
+        <ScoreTile
+          label="Demand"
+          sublabel={`Weight ${Math.round(health.weights.demand * 100)}%`}
+          score={health.demandScore}
+        />
+        <ScoreTile
+          label="Operational"
+          sublabel={`Weight ${Math.round(health.weights.operational * 100)}%`}
+          score={health.operationalScore}
+        />
+      </div>
+
+      {/* Plain-English blurb */}
+      {health.portfolioHealthBlurb && (
+        <div
+          style={{
+            border: `1px solid ${C.line}`,
+            background: "#F8FAFC",
+            padding: "10px 14px",
+            borderRadius: 6,
+            marginBottom: 12,
+            fontSize: 11,
+            lineHeight: 1.5,
+            color: C.body,
+          }}
+        >
+          {health.portfolioHealthBlurb}
+        </div>
+      )}
+
+      {/* Raw inputs grouped by sub-score */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 10,
+          marginBottom: 16,
+        }}
+      >
+        <SubScoreInputs title="Financial" rows={financialRows} />
+        <SubScoreInputs title="Demand" rows={demandRows} />
+        <SubScoreInputs title="Operational" rows={operationalRows} />
+      </div>
+    </>
+  );
+}
+
+function ScoreTile({
+  label,
+  sublabel,
+  score,
+}: {
+  label: string;
+  sublabel: string;
+  score: number | null;
+}) {
+  const color = scoreColor(score);
+  return (
+    <div
+      style={{
+        border: `1px solid ${C.line}`,
+        borderTop: `4px solid ${color}`,
+        borderRadius: 6,
+        padding: "12px 14px",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        minHeight: 72,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 9,
+          textTransform: "uppercase",
+          letterSpacing: 0.8,
+          color: C.muted,
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 28,
+          fontWeight: 800,
+          color,
+          lineHeight: 1,
+          marginTop: 4,
+        }}
+      >
+        {score == null ? "—" : score.toFixed(0)}
+      </div>
+      <div style={{ fontSize: 8, color: C.muted, marginTop: 4 }}>
+        {sublabel}
+      </div>
+    </div>
+  );
+}
+
+function SubScoreInputs({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: Array<{
+    label: string;
+    trace: SourceTrace | undefined;
+    unit: "pct" | "dollars" | "count" | "rate";
+    sourceLabel: string;
+  }>;
+}) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${C.line}`,
+        borderRadius: 6,
+        padding: "8px 10px",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 8,
+          textTransform: "uppercase",
+          letterSpacing: 0.8,
+          color: C.muted,
+          fontWeight: 700,
+          marginBottom: 6,
+          paddingBottom: 4,
+          borderBottom: `1px solid ${C.line}`,
+        }}
+      >
+        {title} inputs
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        {rows.map((r) => (
+          <div
+            key={r.label}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              fontSize: 9,
+            }}
+          >
+            <div style={{ color: C.muted, paddingRight: 6 }}>
+              <div style={{ color: C.body }}>{r.label}</div>
+              <div style={{ fontSize: 7, color: C.muted }}>
+                {r.sourceLabel}
+                {r.trace?.asOf ? ` · ${r.trace.asOf}` : ""}
+              </div>
+            </div>
+            <div
+              style={{
+                fontWeight: 700,
+                color: C.body,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {fmtInput(r.trace?.value ?? null, r.unit)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

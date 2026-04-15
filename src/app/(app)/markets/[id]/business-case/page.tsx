@@ -1,20 +1,28 @@
 /**
  * Business Case page — per-market Phase 3 entry-strategy view.
  *
- * Server wrapper: auth, market lookup, raw-input fetch. All the
+ * Server wrapper: auth, market lookup, raw-input fetch, and the
+ * portfolio health snapshot + narrative for this market (so the PDF
+ * export can embed the Financial/Demand/Operational scores and the
+ * plain-English blurb alongside the business case). All the
  * interactive UI — sliders, re-running the pure scorers on every
  * change, rendering the result cards — lives in BusinessCaseClient.
- * The scorer modules are pure, so the client owns input state and
- * recomputes everything in-browser with zero network round trips.
  */
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { geographies } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  geographies,
+  portfolioHealthSnapshots,
+  marketNarratives,
+  healthScoreWeights,
+} from "@/lib/db/schema";
+import { and, desc, eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { loadBusinessCaseInputs } from "@/lib/business-case/loader";
 import BusinessCaseClient from "./BusinessCaseClient";
+import { resolvePreset } from "@/lib/scoring/weight-presets";
+import type { MarketHealthBundle } from "./BusinessCaseClient";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +43,55 @@ export default async function BusinessCasePage({ params }: PageProps) {
     .limit(1);
   if (!market) notFound();
 
-  const raw = await loadBusinessCaseInputs(market.id);
+  // Run the three reads that don't depend on each other in parallel.
+  const [raw, snapshot, narrative, weightRow] = await Promise.all([
+    loadBusinessCaseInputs(market.id),
+    db
+      .select()
+      .from(portfolioHealthSnapshots)
+      .where(eq(portfolioHealthSnapshots.geographyId, market.id))
+      .orderBy(desc(portfolioHealthSnapshots.snapshotDate))
+      .limit(1),
+    db
+      .select()
+      .from(marketNarratives)
+      .where(eq(marketNarratives.geographyId, market.id))
+      .orderBy(desc(marketNarratives.snapshotDate))
+      .limit(1),
+    db
+      .select()
+      .from(healthScoreWeights)
+      .where(
+        and(
+          eq(healthScoreWeights.userId, session.userId),
+          eq(healthScoreWeights.orgId, session.orgId)
+        )
+      )
+      .limit(1),
+  ]);
+
+  const snap = snapshot[0] ?? null;
+  const narr = narrative[0] ?? null;
+  const preset = resolvePreset(weightRow[0]?.presetName);
+
+  const toNum = (v: unknown): number | null => {
+    if (v == null) return null;
+    const n = typeof v === "number" ? v : parseFloat(String(v));
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const health: MarketHealthBundle | null = snap
+    ? {
+        financialScore: toNum(snap.financialScore),
+        demandScore: toNum(snap.demandScore),
+        operationalScore: toNum(snap.operationalScore),
+        snapshotDate: String(snap.snapshotDate ?? "").slice(0, 10),
+        presetName: preset.name,
+        weights: preset.weights,
+        inputsJson: snap.inputsJson as Record<string, unknown> | null,
+        portfolioHealthBlurb: narr?.portfolioHealthBlurb ?? null,
+      }
+    : null;
 
   return (
     <div className="p-4 sm:p-8 max-w-6xl">
@@ -63,6 +119,7 @@ export default async function BusinessCasePage({ params }: PageProps) {
         marketLabel={`${market.shortName}, ${market.state}`}
         rawOrganic={raw.organic}
         acquisitionTargets={raw.acquisitionTargets}
+        marketHealth={health}
       />
     </div>
   );

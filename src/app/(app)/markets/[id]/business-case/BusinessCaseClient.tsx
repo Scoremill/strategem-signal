@@ -33,11 +33,30 @@ import type { OrganicRawInputs } from "@/lib/business-case/organic-entry-model";
 
 // ─── Props ────────────────────────────────────────────────────────
 
+/**
+ * Snapshot of the market's Portfolio Health sub-scores (Financial,
+ * Demand, Operational) plus the cached plain-English blurb. Sourced
+ * once server-side so the PDF export can include it without a second
+ * round trip. Optional — a brand-new market with no snapshot yet
+ * simply renders the existing business case layout.
+ */
+export interface MarketHealthBundle {
+  financialScore: number | null;
+  demandScore: number | null;
+  operationalScore: number | null;
+  snapshotDate: string;
+  presetName: string;
+  weights: { financial: number; demand: number; operational: number };
+  inputsJson: Record<string, unknown> | null;
+  portfolioHealthBlurb: string | null;
+}
+
 interface Props {
   geographyId: string;
   marketLabel: string;
   rawOrganic: OrganicRawInputs;
   acquisitionTargets: AcquisitionTarget[];
+  marketHealth: MarketHealthBundle | null;
 }
 
 // ─── Formatters ───────────────────────────────────────────────────
@@ -83,6 +102,7 @@ export default function BusinessCaseClient({
   marketLabel,
   rawOrganic,
   acquisitionTargets,
+  marketHealth,
 }: Props) {
   const router = useRouter();
   const [inputs, setInputs] = useState<BusinessCaseInputs>(DEFAULT_INPUTS);
@@ -336,6 +356,7 @@ export default function BusinessCaseClient({
             acquisition={acquisition}
             recommendation={rec.recommendation}
             rationale={rec.rationale}
+            marketHealth={marketHealth}
             generatedAt={new Date().toLocaleDateString(undefined, {
               year: "numeric",
               month: "long",
