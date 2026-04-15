@@ -7,6 +7,14 @@ interface Column {
   label: string;
   align?: "left" | "center" | "right";
   sortable?: boolean;
+  /**
+   * Optional explanatory tooltip shown when the user hovers the
+   * header. Renders as a native browser title attribute — no JS,
+   * no positioning logic, instant feedback. Use for columns where
+   * the header label alone is ambiguous (filter definitions, score
+   * scales, etc.).
+   */
+  tooltip?: string;
 }
 
 interface SortableTableProps {
@@ -71,30 +79,52 @@ export default function SortableTable({
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-gray-50 border-b border-gray-200">
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                className={`py-3 px-3 sm:px-5 font-medium text-[#6B7280] ${alignClass(col.align)} ${
-                  col.sortable !== false ? "cursor-pointer select-none hover:text-[#1E293B] transition-colors" : ""
-                }`}
-                onClick={() => col.sortable !== false && handleSort(col.key)}
-              >
-                <span className="inline-flex items-center gap-1">
-                  {col.label}
-                  {col.sortable !== false && sortKey === col.key && (
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 12 12"
-                      fill="currentColor"
-                      className={`transition-transform ${sortDir === "asc" ? "rotate-180" : ""}`}
-                    >
-                      <path d="M6 8L2 4h8L6 8z" />
-                    </svg>
-                  )}
-                </span>
-              </th>
-            ))}
+            {columns.map((col) => {
+              const hasTooltip = !!col.tooltip;
+              return (
+                <th
+                  key={col.key}
+                  title={col.tooltip}
+                  className={`py-3 px-3 sm:px-5 font-medium text-[#6B7280] ${alignClass(col.align)} ${
+                    col.sortable !== false ? "cursor-pointer select-none hover:text-[#1E293B] transition-colors" : ""
+                  } ${hasTooltip ? "decoration-dotted decoration-[#9CA3AF] underline-offset-4" : ""}`}
+                  onClick={() => col.sortable !== false && handleSort(col.key)}
+                >
+                  <span className={`inline-flex items-center gap-1 ${hasTooltip ? "underline decoration-dotted decoration-[#9CA3AF] underline-offset-4" : ""}`}>
+                    {col.label}
+                    {hasTooltip && (
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="text-[#9CA3AF] flex-shrink-0"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="16" x2="12" y2="12" />
+                        <line x1="12" y1="8" x2="12.01" y2="8" />
+                      </svg>
+                    )}
+                    {col.sortable !== false && sortKey === col.key && (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="currentColor"
+                        className={`transition-transform ${sortDir === "asc" ? "rotate-180" : ""}`}
+                      >
+                        <path d="M6 8L2 4h8L6 8z" />
+                      </svg>
+                    )}
+                  </span>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">

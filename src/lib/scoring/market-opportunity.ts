@@ -59,9 +59,13 @@ export interface MarketOpportunityInputs {
   permitsYoyPct: SourceTrace;
   populationChangePct: SourceTrace;
 
-  // Filter 4 — Competitive Landscape (STUB for Phase 2 ship)
-  // No inputs today. The scorer always returns null and the drilldown
-  // shows a "data pending" placeholder.
+  // Filter 4 — Competitive Landscape
+  // Count of distinct public homebuilders known to operate in the
+  // market, plus a list of their tickers. Sourced from
+  // ops_builder_markets (LLM-parsed earnings narratives).
+  publicBuilderCount: SourceTrace & {
+    tickers?: string[];
+  };
 
   // Filter 5 — Affordability Runway
   // HPI trajectory vs income trajectory. The scorer compares income
@@ -212,20 +216,47 @@ function scoreImbalance(inputs: MarketOpportunityInputs): FilterScore {
   return pack(normalize(gap, -10, 40));
 }
 
-// ─── Filter 4 — Competitive Landscape (STUB) ────────────────────
+// ─── Filter 4 — Competitive Landscape ───────────────────────────
 
 /**
- * Stubbed for the Phase 2 ship. StrategemOps's mirror tables do NOT
- * currently hold a builder→market mapping (no row says "LEN sold 8,400
- * units in Houston"). Rebuilding that mapping would require per-filing
- * disclosure parsing at the MSA level, which is out of scope here.
+ * Score a market on the INVERSE of public-builder concentration. The
+ * fewer public builders operating there, the higher the score — a
+ * market where you'd face less price competition and have a cleaner
+ * runway for organic entry.
  *
- * Returns null + reason "data_pending". The /opportunities table and
- * filter drilldown render a visible "coming soon" state rather than a
- * silent 0.
+ * Data source: ops_builder_markets, which is the LLM-parsed output
+ * of public builder earnings narratives (see scripts/parse-ops-
+ * builder-markets.ts). Each row is a (builder_ticker, geography_id)
+ * pair with a mention_count and confidence.
+ *
+ * Normalization:
+ *   0 builders  → 100 (uncontested, wide open — rare among tracked metros)
+ *   4 builders  → 67  (light competition, mid-sized metro)
+ *   8 builders  → 33  (established market)
+ *   12+ builders → 0  (saturated, organic entry is expensive)
+ *
+ * Known limits of this signal:
+ *   - The LLM only sees what public builders disclose. Private
+ *     builders, regional operators, and developer partnerships are
+ *     invisible to this count. A metro scoring "low competition"
+ *     here may still be crowded with privately-held players.
+ *   - 2 of 20 builders (MTH, LGIH, NVR, PHM historically) disclose
+ *     with less geographic specificity, so their markets are
+ *     under-represented.
+ *   - Inverted score means "fewer = better for entering fresh"
+ *     but doesn't say "fewer = better market overall." A 0-builder
+ *     market might be uncontested OR it might be a market no one
+ *     wants. Always read alongside Filters 1 and 3.
+ *
+ * This is a CEO-scenario signal: "is this market crowded with public
+ * builders?" Answers in a single number for the table and an explicit
+ * list of tickers for the drilldown.
  */
-function scoreCompetitive(_inputs: MarketOpportunityInputs): FilterScore {
-  return pack(null, "data_pending");
+function scoreCompetitive(inputs: MarketOpportunityInputs): FilterScore {
+  const count = inputs.publicBuilderCount.value;
+  if (count == null) return pack(null);
+  // Inverse normalize on [0, 12]
+  return pack(normalizeInverse(count, 0, 12));
 }
 
 // ─── Filter 5 — Affordability Runway ────────────────────────────
@@ -351,6 +382,7 @@ export function emptyMarketOpportunityInputs(): MarketOpportunityInputs {
     sectorEmployment: { ...empty },
     permitsYoyPct: { ...empty },
     populationChangePct: { ...empty },
+    publicBuilderCount: { ...empty },
     hpiYoyPct: { ...empty },
     incomeYoyPct: { ...empty },
     qcewWageYoyPct: { ...empty },
@@ -407,8 +439,8 @@ export const FILTER_META: FilterMeta[] = [
     n: 4,
     label: "Competitive Landscape",
     shortLabel: "Competition",
-    description: "Which public builders are operating at what scale in this market, and is organic or acquisition entry cheaper?",
-    isStub: true,
+    description: "Count of public homebuilders known to operate in this market (via LLM-parsed StrategemOps earnings narratives). Inverted — fewer competitors score higher. Private builders and small regionals are invisible to this count, so read alongside Filters 1 and 3.",
+    isStub: false,
     columnKey: "filter4",
   },
   {

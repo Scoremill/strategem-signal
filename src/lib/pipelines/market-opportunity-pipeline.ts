@@ -26,8 +26,9 @@ import {
   incomeData,
   fhfaHpi,
   marketOpportunityScores,
+  opsBuilderMarkets,
 } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import {
   computeMarketOpportunity,
@@ -382,6 +383,32 @@ function parseCsvLine(line: string): string[] {
 // ─── Main pipeline ──────────────────────────────────────────────
 
 /**
+ * Load the count of public homebuilders known to operate in this
+ * market, plus the list of their tickers for the drilldown. Sourced
+ * from ops_builder_markets which is the LLM-parsed output of
+ * StrategemOps earnings narratives.
+ *
+ * Returns 0 if no builders mention the market — that's the
+ * "uncontested" signal, not a null. Filter 4 treats 0 as a real
+ * (high) score, not as missing data.
+ */
+async function loadBuilderCount(
+  geographyId: string
+): Promise<{ trace: SourceTrace; tickers: string[] }> {
+  const rows = await db
+    .select({
+      ticker: opsBuilderMarkets.builderTicker,
+    })
+    .from(opsBuilderMarkets)
+    .where(eq(opsBuilderMarkets.geographyId, geographyId));
+  const tickers = rows.map((r) => r.ticker).sort();
+  return {
+    trace: trace(tickers.length, "ops_builder_markets", new Date().toISOString().slice(0, 10)),
+    tickers,
+  };
+}
+
+/**
  * Load the latest FHFA HPI YoY for Filter 5 affordability.
  */
 async function loadHpiYoy(geographyId: string): Promise<SourceTrace> {
@@ -424,15 +451,23 @@ async function loadInputsForMarket(
   cbsaFips: string,
   qtr: { year: number; quarter: number } | null
 ): Promise<MarketOpportunityInputs> {
-  const [permitsYoy, migration, operational, sectorData, hpiYoy, incomeYoy] =
-    await Promise.all([
-      loadPermitsYoy(geographyId),
-      loadMigration(geographyId),
-      loadOperationalFromQcew(geographyId),
-      fetchSectorBreakdown(cbsaFips, qtr),
-      loadHpiYoy(geographyId),
-      loadIncomeYoy(geographyId),
-    ]);
+  const [
+    permitsYoy,
+    migration,
+    operational,
+    sectorData,
+    hpiYoy,
+    incomeYoy,
+    builderData,
+  ] = await Promise.all([
+    loadPermitsYoy(geographyId),
+    loadMigration(geographyId),
+    loadOperationalFromQcew(geographyId),
+    fetchSectorBreakdown(cbsaFips, qtr),
+    loadHpiYoy(geographyId),
+    loadIncomeYoy(geographyId),
+    loadBuilderCount(geographyId),
+  ]);
 
   const inputs = emptyMarketOpportunityInputs();
   inputs.permitsYoyPct = permitsYoy;
@@ -444,6 +479,10 @@ async function loadInputsForMarket(
   inputs.qcewEmploymentYoyPct = operational.employmentYoy;
   inputs.hpiYoyPct = hpiYoy;
   inputs.incomeYoyPct = incomeYoy;
+  inputs.publicBuilderCount = {
+    ...builderData.trace,
+    tickers: builderData.tickers,
+  };
   inputs.sectorEmployment = {
     value: sectorData ? Object.values(sectorData.breakdown).reduce((a, b) => a + b, 0) : null,
     source: "bls_qcew",

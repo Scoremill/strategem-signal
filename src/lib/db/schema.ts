@@ -415,6 +415,45 @@ export const auditLog = pgTable("audit_log", {
   index("idx_audit_log_org_created").on(table.orgId, table.createdAt),
 ]);
 
+// ─── StrategemOps Builder → Market Mapping ──────────────────────
+//
+// Derived table. NOT a mirror of a StrategemOps table — we build this
+// table ourselves by parsing the narrative text from
+// ops_management_narratives with an LLM, extracting per-builder
+// mentions of specific markets (cities, metros, submarkets), then
+// resolving each mention to a CBSA in our geographies table.
+//
+// Used by Phase 2 Filter 4 (Competitive Landscape) which scores each
+// market by counting how many public builders operate in it, and by
+// the Phase 3 Acquisition Entry Model.
+//
+// Schema:
+//   builder_ticker   Ticker from ops_companies
+//   geography_id     FK to geographies
+//   mention_count    Number of distinct narratives that mention this
+//                    builder→market pair (confidence signal)
+//   first_seen_year  Earliest fiscal year in which the pair appeared
+//   last_seen_year   Most recent fiscal year in which the pair appeared
+//   source_ids       JSON array of ops_management_narratives row ids
+//                    so a reviewer can jump to the source quote
+//   confidence       "high" (explicitly stated), "medium" (implied via
+//                    project or community name), "low" (inferred only)
+export const opsBuilderMarkets = pgTable("ops_builder_markets", {
+  id: text("id").primaryKey(), // UUID
+  builderTicker: text("builder_ticker").notNull(),
+  geographyId: text("geography_id").notNull().references(() => geographies.id, { onDelete: "cascade" }),
+  mentionCount: integer("mention_count").notNull().default(1),
+  firstSeenYear: integer("first_seen_year"),
+  lastSeenYear: integer("last_seen_year"),
+  sourceIds: json("source_ids"), // int[]
+  confidence: text("confidence").default("medium").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_ops_builder_markets_bt_geo").on(table.builderTicker, table.geographyId),
+  index("idx_ops_builder_markets_geo").on(table.geographyId),
+  index("idx_ops_builder_markets_ticker").on(table.builderTicker),
+]);
+
 // ─── FHFA House Price Index ──────────────────────────────────────
 //
 // Quarterly home price index from the Federal Housing Finance Agency.

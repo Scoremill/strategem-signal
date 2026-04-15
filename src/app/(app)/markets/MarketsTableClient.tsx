@@ -106,22 +106,88 @@ export default function MarketsTableClient({ rows, preset }: MarketsTableClientP
   const healthColumns = [
     { key: "shortName", label: "Market", align: "left" as const },
     { key: "state", label: "State", align: "left" as const },
-    { key: "composite", label: "Composite", align: "center" as const },
-    { key: "financial", label: "Financial", align: "center" as const },
-    { key: "demand", label: "Demand", align: "center" as const },
-    { key: "operational", label: "Operational", align: "center" as const },
+    {
+      key: "composite",
+      label: "Composite",
+      align: "center" as const,
+      tooltip:
+        "Composite Portfolio Health Score (0-100). Blend of Financial, Demand, and Operational sub-scores using your current weighting preset. Higher is healthier. Change your preset in Settings.",
+    },
+    {
+      key: "financial",
+      label: "Financial",
+      align: "center" as const,
+      tooltip:
+        "Financial sub-score (0-100). Affordability runway based on Census ACS median household income and YoY income growth. Higher = more buying power in the market.",
+    },
+    {
+      key: "demand",
+      label: "Demand",
+      align: "center" as const,
+      tooltip:
+        "Demand sub-score (0-100). Composite of Census single-family permits YoY, BLS employment growth, Census net migration, and BLS unemployment (inverted). Higher = stronger growth signals.",
+    },
+    {
+      key: "operational",
+      label: "Operational",
+      align: "center" as const,
+      tooltip:
+        "Operational sub-score (0-100). BLS QCEW construction wage growth (inverted — rising wages are bad for margins) and construction trade employment trajectory. Higher = easier to build and complete on schedule.",
+    },
   ];
 
   const opportunityColumns = [
     { key: "shortName", label: "Market", align: "left" as const },
     { key: "state", label: "State", align: "left" as const },
-    { key: "numGreen", label: "Green", align: "center" as const },
-    { key: "filter1", label: "Migration", align: "center" as const },
-    { key: "filter2", label: "Diversity", align: "center" as const },
-    { key: "filter3", label: "Imbalance", align: "center" as const },
-    { key: "filter4", label: "Competition*", align: "center" as const },
-    { key: "filter5", label: "Affordability*", align: "center" as const },
-    { key: "filter6", label: "Operational", align: "center" as const },
+    {
+      key: "numGreen",
+      label: "Green",
+      align: "center" as const,
+      tooltip:
+        "Number of the six filters this market passes (score ≥ 60). A '6/6' market would be strong on every dimension; a '3/6' market passes migration and operational but fails affordability, etc. Click any filter cell to see why.",
+    },
+    {
+      key: "filter1",
+      label: "Migration",
+      align: "center" as const,
+      tooltip:
+        "Filter 1 — Migration Tailwinds. Net domestic migration as a share of total population (Census PEP). Rewards metros where people are actually moving in. Normalized on [-0.5%, +1.5%] population change.",
+    },
+    {
+      key: "filter2",
+      label: "Diversity",
+      align: "center" as const,
+      tooltip:
+        "Filter 2 — Employment Diversity. Herfindahl-Hirschman Index across 2-digit NAICS private-sector employment (BLS QCEW). Penalizes markets where one sector dominates. Rewards metros where a downturn in any single industry wouldn't sink the economy.",
+    },
+    {
+      key: "filter3",
+      label: "Imbalance",
+      align: "center" as const,
+      tooltip:
+        "Filter 3 — Supply-Demand Imbalance. Population growth vs permit growth (Census BPS vs Census PEP). Rewards markets where demand is running ahead of supply — the 'find under-built metros' lens from the CEO scenario.",
+    },
+    {
+      key: "filter4",
+      label: "Competition*",
+      align: "center" as const,
+      tooltip:
+        "Filter 4 — Competitive Landscape. Counts the number of public homebuilders operating in the market (via LLM-parsed StrategemOps earnings narratives). Inverted — fewer competitors = higher score = easier organic entry. Stubbed when data is pending.",
+    },
+    {
+      key: "filter5",
+      label: "Affordability*",
+      align: "center" as const,
+      tooltip:
+        "Filter 5 — Affordability Runway. Income growth vs FHFA House Price Index growth. Rewards markets where incomes are outrunning home prices (runway expanding); penalizes bubble-risk markets (HPI climbing too fast) and flat/cooling markets.",
+    },
+    {
+      key: "filter6",
+      label: "Operational",
+      align: "center" as const,
+      tooltip:
+        "Filter 6 — Operational Feasibility. BLS QCEW construction wage growth (inverted) and trade employment trajectory. Same math as the Portfolio Health Operational sub-score — rewards markets where you can actually complete on schedule.",
+    },
     { key: "watchlist", label: "", align: "center" as const, sortable: false },
   ];
 
