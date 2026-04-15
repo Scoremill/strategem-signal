@@ -252,7 +252,7 @@ export default function BusinessCaseClient({
               type="text"
               value={saveTitle}
               onChange={(e) => setSaveTitle(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#F97316] focus:outline-none focus:ring-2 focus:ring-[#FFF7ED]"
+              className="w-full rounded-lg border border-gray-300 bg-white text-[#1E293B] placeholder:text-[#9CA3AF] px-3 py-2 text-sm focus:border-[#F97316] focus:outline-none focus:ring-2 focus:ring-[#FFF7ED]"
               placeholder="e.g. Atlanta — 30% land aggressive optioned"
             />
             <label className="block text-xs font-semibold text-[#1E293B] mt-4 mb-1">
@@ -262,7 +262,7 @@ export default function BusinessCaseClient({
               value={saveNotes}
               onChange={(e) => setSaveNotes(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#F97316] focus:outline-none focus:ring-2 focus:ring-[#FFF7ED]"
+              className="w-full rounded-lg border border-gray-300 bg-white text-[#1E293B] placeholder:text-[#9CA3AF] px-3 py-2 text-sm focus:border-[#F97316] focus:outline-none focus:ring-2 focus:ring-[#FFF7ED]"
               placeholder="Why this scenario matters…"
             />
             {saveMsg && (
