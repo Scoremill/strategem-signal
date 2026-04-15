@@ -54,6 +54,67 @@ const MONTHS_TO_FIRST_CLOSING = {
 } as const;
 
 /**
+ * Capital turns per year, per bucket. This is NOT 12 / months-to-first-
+ * closing — that would be an annualization trick. Real community-level
+ * turns depend on how long capital stays locked into the LAND portion
+ * of the basis:
+ *
+ *   - Finished lots: ~3 turns. Vertical cycle is ~4 months, and because
+ *     you bought finished lots you can redeploy the capital into new
+ *     lots each cycle. Slightly below the raw 12/4 ideal because of
+ *     absorption friction between cycles (permits, sales cadence).
+ *
+ *   - Raw land: ~1 turn. Land sits on the balance sheet through the
+ *     full development + absorption arc of a community (~3-4 years for
+ *     a 150-unit community at 40 closings/yr). Capital is effectively
+ *     NOT recycled — you close home after home out of the same basis.
+ *
+ *   - Optioned: ~4 turns. NVR-style. Land never hits the balance sheet
+ *     until takedown, so your capital is dominated by vertical, which
+ *     cycles as fast as you can build + sell. This is the number NVR
+ *     reports in their community-level economics and is the reason
+ *     they earn 30%+ ROIC consistently.
+ */
+const DEFAULT_CAPITAL_TURNS_PER_YEAR = {
+  finished: 3,
+  raw: 1,
+  optioned: 4,
+} as const;
+
+/**
+ * Haircut applied to raw gross margin to reconcile with how public
+ * homebuilders report homebuilding gross margin. The 5-point haircut
+ * covers: sales commissions (~3%), closing costs (~1%), and interest
+ * capitalized into cost of sales (~1%). So a raw 21% becomes a
+ * reported-equivalent 16%, matching what LEN/DHI/PHM disclose.
+ */
+const GROSS_MARGIN_HAIRCUT_PCT = 5;
+
+/**
+ * Per-bucket corporate SG&A haircut, expressed as a percentage of
+ * revenue. Applied on top of the gross-margin number to get the
+ * cycle-level estimated ROIC the CEO should expect at the bottom
+ * line.
+ *
+ *   - Optioned 6%: NVR publishes ~7% SG&A / revenue; we shade
+ *     slightly below because options shift some overhead onto land
+ *     sellers.
+ *   - Finished 8%: mid-range public builder (LEN, DHI, PHM) reports
+ *     7-9% SG&A / revenue.
+ *   - Raw 10%: land-heavy operations carry an entitlement team,
+ *     horizontal engineers, and longer overhead stacks; TPH-style
+ *     builders report 10-12%.
+ *
+ * These are defaults; the CEO can stress-test via the slider in the
+ * UI, which exposes a single "SG&A multiplier" that scales all three.
+ */
+const DEFAULT_SGA_PCT_BY_BUCKET = {
+  finished: 8,
+  raw: 10,
+  optioned: 6,
+} as const;
+
+/**
  * Annual cost of carry on deployed capital (land + vertical). 8% is
  * the blended cost-of-capital the public builders use in their own
  * community-level underwriting per their 10-K disclosures.
@@ -70,9 +131,10 @@ const NEW_CONSTRUCTION_PREMIUM = 1.05;
 /**
  * Target gross margin assumption for the sale price projection. We
  * don't use this to back into sale price — we use it to flag buckets
- * whose actual computed margin falls below this threshold.
+ * whose actual computed margin falls below this threshold. Healthy
+ * public builders run reported gross margin at 18-24%.
  */
-const HEALTHY_MARGIN_THRESHOLD_PCT = 18;
+const HEALTHY_MARGIN_THRESHOLD_PCT = 16;
 
 /**
  * QCEW gives us construction sector avg weekly wage. To convert to a
@@ -156,6 +218,53 @@ interface BucketContext {
   inputs: BusinessCaseInputs;
 }
 
+type BucketKey = "finished" | "raw" | "optioned";
+
+/**
+ * Shared bucket post-processing. Given the capital + raw margin for
+ * a bucket, applies:
+ *
+ *   1. The 5-point gross-margin haircut (commissions, closing,
+ *      capitalized interest) to get a reported-equivalent margin.
+ *   2. The bucket's realistic capital turns per year (NOT 12/months).
+ *   3. Cycle contribution = reported margin × turns, PRE-SG&A.
+ *   4. Estimated ROIC = cycle contribution − per-bucket SG&A haircut.
+ *
+ * Returns the three display numbers the bucket output needs, plus
+ * the effective SG&A % so the UI can surface it.
+ */
+function deriveReturnMetrics(
+  grossMarginRawPct: number,
+  bucket: BucketKey,
+  sgaMultiplier: number
+): {
+  grossMarginPct: number;
+  capitalTurnsPerYear: number;
+  cycleContributionPct: number;
+  estimatedRoicPct: number;
+  sgaPct: number;
+} {
+  const reported = Math.max(
+    0,
+    grossMarginRawPct - GROSS_MARGIN_HAIRCUT_PCT
+  );
+  const turns = DEFAULT_CAPITAL_TURNS_PER_YEAR[bucket];
+  const cycleContribution = reported * turns;
+  // SG&A is a percentage of REVENUE, so to subtract it from a
+  // return-on-capital number we multiply it by turns as well (each
+  // turn generates a fresh revenue cycle which carries its own SG&A).
+  const sgaPct = DEFAULT_SGA_PCT_BY_BUCKET[bucket] * sgaMultiplier;
+  const sgaDragPct = sgaPct * turns;
+  const estimatedRoic = cycleContribution - sgaDragPct;
+  return {
+    grossMarginPct: reported,
+    capitalTurnsPerYear: turns,
+    cycleContributionPct: cycleContribution,
+    estimatedRoicPct: estimatedRoic,
+    sgaPct,
+  };
+}
+
 function computeFinishedBucket(
   ctx: BucketContext,
   mixPct: number
@@ -168,23 +277,30 @@ function computeFinishedBucket(
   const preCarryCapital = lotCost + buildCost;
   const carry = computeCarryCost(preCarryCapital, MONTHS_TO_FIRST_CLOSING.finished);
   const capitalPerUnit = preCarryCapital + carry;
-  const grossMargin = ctx.projectedSalePrice - capitalPerUnit;
-  const grossMarginPct = (grossMargin / ctx.projectedSalePrice) * 100;
-  const roicPct = (grossMargin / capitalPerUnit) * (12 / MONTHS_TO_FIRST_CLOSING.finished) * 100;
+  const grossMarginDollars = ctx.projectedSalePrice - capitalPerUnit;
+  const grossMarginRawPct = (grossMarginDollars / ctx.projectedSalePrice) * 100;
+  const metrics = deriveReturnMetrics(
+    grossMarginRawPct,
+    "finished",
+    ctx.inputs.sgaMultiplier
+  );
 
   const notes: string[] = [];
-  notes.push("Finished lots — ready for vertical immediately.");
-  if (grossMarginPct < HEALTHY_MARGIN_THRESHOLD_PCT) {
+  notes.push("Finished lots — ready for vertical immediately, ~3 turns/yr.");
+  if (metrics.grossMarginPct < HEALTHY_MARGIN_THRESHOLD_PCT) {
     notes.push(
-      `Margin ${roundTo(grossMarginPct, 1)}% below ${HEALTHY_MARGIN_THRESHOLD_PCT}% threshold — finished-lot premium may be eating margin.`
+      `Reported margin ${roundTo(metrics.grossMarginPct, 1)}% below ${HEALTHY_MARGIN_THRESHOLD_PCT}% threshold — finished-lot premium is eating margin.`
     );
   }
   return {
     mixPct,
     capitalPerUnit: Math.round(capitalPerUnit),
     monthsToFirstClosing: MONTHS_TO_FIRST_CLOSING.finished,
-    grossMarginPct: roundTo(grossMarginPct, 1),
-    roicPct: roundTo(roicPct, 1),
+    grossMarginPct: roundTo(metrics.grossMarginPct, 1),
+    capitalTurnsPerYear: metrics.capitalTurnsPerYear,
+    cycleContributionPct: roundTo(metrics.cycleContributionPct, 1),
+    estimatedRoicPct: roundTo(metrics.estimatedRoicPct, 1),
+    sgaPct: roundTo(metrics.sgaPct, 1),
     notes,
   };
 }
@@ -202,23 +318,32 @@ function computeRawBucket(
   const preCarryCapital = ctx.rawLandCostPerUnit + horizontalCost + buildCost;
   const carry = computeCarryCost(preCarryCapital, MONTHS_TO_FIRST_CLOSING.raw);
   const capitalPerUnit = preCarryCapital + carry;
-  const grossMargin = ctx.projectedSalePrice - capitalPerUnit;
-  const grossMarginPct = (grossMargin / ctx.projectedSalePrice) * 100;
-  const roicPct = (grossMargin / capitalPerUnit) * (12 / MONTHS_TO_FIRST_CLOSING.raw) * 100;
+  const grossMarginDollars = ctx.projectedSalePrice - capitalPerUnit;
+  const grossMarginRawPct = (grossMarginDollars / ctx.projectedSalePrice) * 100;
+  const metrics = deriveReturnMetrics(
+    grossMarginRawPct,
+    "raw",
+    ctx.inputs.sgaMultiplier
+  );
 
   const notes: string[] = [];
-  notes.push("Raw land — cheapest basis but 18-36mo before first closing.");
-  if (grossMarginPct >= HEALTHY_MARGIN_THRESHOLD_PCT) {
+  notes.push(
+    "Raw land — cheapest basis, longest hold; ~1 turn/yr because land carries the community."
+  );
+  if (metrics.grossMarginPct >= HEALTHY_MARGIN_THRESHOLD_PCT) {
     notes.push(
-      `Strongest margin at ${roundTo(grossMarginPct, 1)}% — rewards the CEO who can carry the horizontal work.`
+      `Strongest reported margin at ${roundTo(metrics.grossMarginPct, 1)}% — rewards a CEO who can carry the horizontal work.`
     );
   }
   return {
     mixPct,
     capitalPerUnit: Math.round(capitalPerUnit),
     monthsToFirstClosing: MONTHS_TO_FIRST_CLOSING.raw,
-    grossMarginPct: roundTo(grossMarginPct, 1),
-    roicPct: roundTo(roicPct, 1),
+    grossMarginPct: roundTo(metrics.grossMarginPct, 1),
+    capitalTurnsPerYear: metrics.capitalTurnsPerYear,
+    cycleContributionPct: roundTo(metrics.cycleContributionPct, 1),
+    estimatedRoicPct: roundTo(metrics.estimatedRoicPct, 1),
+    sgaPct: roundTo(metrics.sgaPct, 1),
     notes,
   };
 }
@@ -238,21 +363,32 @@ function computeOptionedBucket(
   const preCarryCapital = ctx.rawLandCostPerUnit + optionFee + buildCost;
   const carry = computeCarryCost(buildCost, MONTHS_TO_FIRST_CLOSING.optioned);
   const capitalPerUnit = preCarryCapital + carry;
-  const grossMargin = ctx.projectedSalePrice - capitalPerUnit;
-  const grossMarginPct = (grossMargin / ctx.projectedSalePrice) * 100;
-  const roicPct = (grossMargin / capitalPerUnit) * (12 / MONTHS_TO_FIRST_CLOSING.optioned) * 100;
+  const grossMarginDollars = ctx.projectedSalePrice - capitalPerUnit;
+  const grossMarginRawPct = (grossMarginDollars / ctx.projectedSalePrice) * 100;
+  const metrics = deriveReturnMetrics(
+    grossMarginRawPct,
+    "optioned",
+    ctx.inputs.sgaMultiplier
+  );
 
   const notes: string[] = [];
-  notes.push("Optioned — NVR-style. Minimal upfront capital, highest ROIC.");
-  if (roicPct >= 40) {
-    notes.push(`ROIC ${roundTo(roicPct, 0)}% — option premium is earning its keep.`);
+  notes.push(
+    "Optioned — NVR-style. Capital cycles as fast as vertical; ~4 turns/yr."
+  );
+  if (metrics.estimatedRoicPct >= 25) {
+    notes.push(
+      `Estimated ROIC ${roundTo(metrics.estimatedRoicPct, 0)}% — option premium is earning its keep.`
+    );
   }
   return {
     mixPct,
     capitalPerUnit: Math.round(capitalPerUnit),
     monthsToFirstClosing: MONTHS_TO_FIRST_CLOSING.optioned,
-    grossMarginPct: roundTo(grossMarginPct, 1),
-    roicPct: roundTo(roicPct, 1),
+    grossMarginPct: roundTo(metrics.grossMarginPct, 1),
+    capitalTurnsPerYear: metrics.capitalTurnsPerYear,
+    cycleContributionPct: roundTo(metrics.cycleContributionPct, 1),
+    estimatedRoicPct: roundTo(metrics.estimatedRoicPct, 1),
+    sgaPct: roundTo(metrics.sgaPct, 1),
     notes,
   };
 }
@@ -263,7 +399,10 @@ function emptyBucket(mixPct: number, notes: string[]): OrganicBucketOutput {
     capitalPerUnit: null,
     monthsToFirstClosing: null,
     grossMarginPct: null,
-    roicPct: null,
+    capitalTurnsPerYear: null,
+    cycleContributionPct: null,
+    estimatedRoicPct: null,
+    sgaPct: 0,
     notes,
   };
 }
@@ -334,10 +473,22 @@ export function computeOrganicEntry(
     { weight: optioned.mixPct, value: optioned.grossMarginPct },
   ]);
 
-  const blendedRoicPct = weightedAverage([
-    { weight: finished.mixPct, value: finished.roicPct },
-    { weight: rawBucket.mixPct, value: rawBucket.roicPct },
-    { weight: optioned.mixPct, value: optioned.roicPct },
+  const blendedCapitalTurnsPerYear = weightedAverage([
+    { weight: finished.mixPct, value: finished.capitalTurnsPerYear },
+    { weight: rawBucket.mixPct, value: rawBucket.capitalTurnsPerYear },
+    { weight: optioned.mixPct, value: optioned.capitalTurnsPerYear },
+  ]);
+
+  const blendedCycleContributionPct = weightedAverage([
+    { weight: finished.mixPct, value: finished.cycleContributionPct },
+    { weight: rawBucket.mixPct, value: rawBucket.cycleContributionPct },
+    { weight: optioned.mixPct, value: optioned.cycleContributionPct },
+  ]);
+
+  const blendedEstimatedRoicPct = weightedAverage([
+    { weight: finished.mixPct, value: finished.estimatedRoicPct },
+    { weight: rawBucket.mixPct, value: rawBucket.estimatedRoicPct },
+    { weight: optioned.mixPct, value: optioned.estimatedRoicPct },
   ]);
 
   // Year-one capital deployed = blended capital × target unit volume ×
@@ -374,8 +525,18 @@ export function computeOrganicEntry(
       blendedGrossMarginPct !== null
         ? roundTo(blendedGrossMarginPct, 1)
         : null,
-    blendedRoicPct:
-      blendedRoicPct !== null ? roundTo(blendedRoicPct, 1) : null,
+    blendedCapitalTurnsPerYear:
+      blendedCapitalTurnsPerYear !== null
+        ? roundTo(blendedCapitalTurnsPerYear, 2)
+        : null,
+    blendedCycleContributionPct:
+      blendedCycleContributionPct !== null
+        ? roundTo(blendedCycleContributionPct, 1)
+        : null,
+    blendedEstimatedRoicPct:
+      blendedEstimatedRoicPct !== null
+        ? roundTo(blendedEstimatedRoicPct, 1)
+        : null,
     yearOneCapitalDeployed,
     finished,
     raw: rawBucket,
@@ -404,7 +565,9 @@ function emptyOrganicOutput(
     blendedCapitalPerUnit: null,
     blendedMonthsToFirstClosing: null,
     blendedGrossMarginPct: null,
-    blendedRoicPct: null,
+    blendedCapitalTurnsPerYear: null,
+    blendedCycleContributionPct: null,
+    blendedEstimatedRoicPct: null,
     yearOneCapitalDeployed: null,
     finished: emptyBucket(inputs.landMix.pctFinished, ["No data."]),
     raw: emptyBucket(inputs.landMix.pctRaw, ["No data."]),

@@ -83,16 +83,9 @@ function fmtMonths(n: number | null): string {
   return `${n.toFixed(n >= 10 ? 0 : 1)} mo`;
 }
 
-/**
- * Cap the ROIC display to a sane upper bound. Annualizing a 4-month
- * finished-lot cycle produces math like 270% that is mathematically
- * correct but board-room misleading. We show ">150%" instead and leave
- * the raw number in the tooltip for anyone who cares.
- */
-function fmtRoic(n: number | null): string {
+function fmtTurns(n: number | null): string {
   if (n === null) return "—";
-  if (n > 150) return ">150%";
-  return `${n.toFixed(1)}%`;
+  return `${n.toFixed(n >= 10 ? 0 : 1)}×`;
 }
 
 // ─── Component ────────────────────────────────────────────────────
@@ -443,6 +436,18 @@ function ControlsPanel({
       />
 
       <SliderField
+        label="SG&A stack"
+        value={inputs.sgaMultiplier}
+        min={0.6}
+        max={1.4}
+        step={0.05}
+        unit="×"
+        decimals={2}
+        hint="1.0× = industry default (finished 8%, raw 10%, optioned 6%)"
+        onChange={(v) => onField("sgaMultiplier", v)}
+      />
+
+      <SliderField
         label="Year-one volume"
         value={inputs.targetUnitsPerYear}
         min={100}
@@ -713,10 +718,22 @@ function OrganicCard({ organic }: { organic: OrganicOutput }) {
         value={fmtMonths(organic.blendedMonthsToFirstClosing)}
       />
       <StatLine
-        label="Gross margin (blended)"
+        label="Gross margin (reported-equiv)"
         value={fmtPct(organic.blendedGrossMarginPct)}
       />
-      <StatLine label="ROIC (blended)" value={fmtRoic(organic.blendedRoicPct)} />
+      <StatLine
+        label="Capital turns / yr"
+        value={fmtTurns(organic.blendedCapitalTurnsPerYear)}
+      />
+      <StatLine
+        label="Cycle contribution (pre-SG&A)"
+        value={fmtPct(organic.blendedCycleContributionPct)}
+      />
+      <StatLine
+        label="Estimated ROIC (post-SG&A)"
+        value={fmtPct(organic.blendedEstimatedRoicPct)}
+        emphasis
+      />
       <StatLine
         label="Year-one capital deployed"
         value={fmtMoney(organic.yearOneCapitalDeployed)}
@@ -833,23 +850,41 @@ function BucketBreakdown({ organic }: { organic: OrganicOutput }) {
         <table className="w-full text-sm">
           <thead className="bg-[#FFF7ED]">
             <tr>
-              <th className="text-left px-5 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold">
+              <th className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold">
                 Bucket
               </th>
-              <th className="text-right px-5 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold">
+              <th className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold">
                 Mix
               </th>
-              <th className="text-right px-5 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold">
+              <th className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold">
                 Capital / unit
               </th>
-              <th className="text-right px-5 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold">
+              <th className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold">
                 Months
               </th>
-              <th className="text-right px-5 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold">
+              <th
+                className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold"
+                title="Reported-equivalent gross margin — after a 5-point haircut for sales commissions, closing costs, and capitalized interest"
+              >
                 Margin
               </th>
-              <th className="text-right px-5 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold">
-                ROIC
+              <th
+                className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold"
+                title="Capital turns per year — how many times invested capital cycles through a cost-of-sales computation in a year"
+              >
+                Turns
+              </th>
+              <th
+                className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold"
+                title="Cycle contribution — Margin × Turns, pre-SG&A. Community-level capital efficiency; expect 5-10 points of drag before it reaches the bottom line."
+              >
+                Cycle (pre-SG&amp;A)
+              </th>
+              <th
+                className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold"
+                title="Estimated ROIC — cycle contribution minus per-bucket SG&A (finished 8%, raw 10%, optioned 6% at defaults)"
+              >
+                Est. ROIC
               </th>
             </tr>
           </thead>
@@ -859,23 +894,29 @@ function BucketBreakdown({ organic }: { organic: OrganicOutput }) {
                 key={b.name}
                 className={i % 2 === 0 ? "bg-white" : "bg-[#FFF7ED]/40"}
               >
-                <td className="px-5 py-3 text-[#1E293B] font-medium">
+                <td className="px-4 py-3 text-[#1E293B] font-medium">
                   {b.name}
                 </td>
-                <td className="px-5 py-3 text-right text-[#1E293B]">
+                <td className="px-3 py-3 text-right text-[#1E293B]">
                   {b.data.mixPct}%
                 </td>
-                <td className="px-5 py-3 text-right text-[#1E293B]">
+                <td className="px-3 py-3 text-right text-[#1E293B]">
                   {fmtDollarsFull(b.data.capitalPerUnit)}
                 </td>
-                <td className="px-5 py-3 text-right text-[#1E293B]">
+                <td className="px-3 py-3 text-right text-[#1E293B]">
                   {fmtMonths(b.data.monthsToFirstClosing)}
                 </td>
-                <td className="px-5 py-3 text-right text-[#1E293B]">
+                <td className="px-3 py-3 text-right text-[#1E293B]">
                   {fmtPct(b.data.grossMarginPct)}
                 </td>
-                <td className="px-5 py-3 text-right text-[#1E293B]">
-                  {fmtRoic(b.data.roicPct)}
+                <td className="px-3 py-3 text-right text-[#1E293B]">
+                  {fmtTurns(b.data.capitalTurnsPerYear)}
+                </td>
+                <td className="px-3 py-3 text-right text-[#1E293B]">
+                  {fmtPct(b.data.cycleContributionPct)}
+                </td>
+                <td className="px-3 py-3 text-right font-bold text-[#F97316]">
+                  {fmtPct(b.data.estimatedRoicPct)}
                 </td>
               </tr>
             ))}

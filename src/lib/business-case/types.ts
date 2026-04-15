@@ -76,6 +76,13 @@ export interface BusinessCaseInputs {
    * money and option extension fees.
    */
   optionFeePct: number;
+
+  /**
+   * SG&A multiplier that scales all three per-bucket SG&A haircuts at
+   * once. 1.0 = the defaults (finished 8%, raw 10%, optioned 6%). CEO
+   * can stress-test their actual overhead stack between 0.6x and 1.4x.
+   */
+  sgaMultiplier: number;
 }
 
 export const DEFAULT_INPUTS: BusinessCaseInputs = {
@@ -90,6 +97,7 @@ export const DEFAULT_INPUTS: BusinessCaseInputs = {
   },
   horizontalPctOfRaw: 40,
   optionFeePct: 5,
+  sgaMultiplier: 1.0,
 };
 
 // ─── Organic Entry Model outputs ────────────────────────────────
@@ -104,10 +112,36 @@ export interface OrganicBucketOutput {
   capitalPerUnit: number | null;
   /** Months from land acquisition to first home closing in this bucket. */
   monthsToFirstClosing: number | null;
-  /** Gross margin at projected sale price. */
+  /**
+   * Gross margin at projected sale price, AFTER the 5-point haircut
+   * for commissions, closing costs, and interest capitalized into
+   * cost of sales. Matches how LEN / DHI / PHM report homebuilding
+   * gross margin in their 10-Ks.
+   */
   grossMarginPct: number | null;
-  /** Return on invested capital at steady state. */
-  roicPct: number | null;
+  /**
+   * Capital turns per year for this bucket. Reflects how many times a
+   * dollar of invested capital cycles through a cost-of-sales
+   * computation per year, given the bucket's land structure.
+   * Finished ~3, raw ~1, optioned ~4 at defaults.
+   */
+  capitalTurnsPerYear: number | null;
+  /**
+   * Cycle contribution: gross margin × turns, PRE-SG&A. This is the
+   * community-level capital efficiency number — what the gross margin
+   * would return on invested capital if SG&A, interest, and taxes were
+   * zero. Reported alongside estimatedRoicPct to prevent confusion.
+   */
+  cycleContributionPct: number | null;
+  /**
+   * Estimated ROIC post a per-bucket SG&A haircut. This is the honest
+   * CEO-facing number — what the bucket's capital is expected to earn
+   * after corporate overhead is subtracted. Will be well below cycle
+   * contribution; that's the whole point of showing both.
+   */
+  estimatedRoicPct: number | null;
+  /** The SG&A % applied to this bucket (for the assumptions drawer). */
+  sgaPct: number;
   /** Notes the scorer wants to surface on the bucket (e.g. "NVR-style"). */
   notes: string[];
 }
@@ -117,10 +151,14 @@ export interface OrganicOutput {
   blendedCapitalPerUnit: number | null;
   /** Weighted months to first closing. */
   blendedMonthsToFirstClosing: number | null;
-  /** Weighted gross margin. */
+  /** Weighted gross margin (post haircut, matches public builder reporting). */
   blendedGrossMarginPct: number | null;
-  /** Weighted ROIC. */
-  blendedRoicPct: number | null;
+  /** Weighted capital turns per year across all three buckets. */
+  blendedCapitalTurnsPerYear: number | null;
+  /** Weighted cycle contribution (pre-SG&A). */
+  blendedCycleContributionPct: number | null;
+  /** Weighted estimated ROIC (post a per-bucket SG&A haircut). */
+  blendedEstimatedRoicPct: number | null;
   /** Estimated total year-one capital deployed for the target unit volume. */
   yearOneCapitalDeployed: number | null;
   /** Per-bucket breakdown for the UI. */

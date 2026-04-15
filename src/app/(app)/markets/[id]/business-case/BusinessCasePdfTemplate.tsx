@@ -69,10 +69,9 @@ function fmtMonths(n: number | null): string {
   if (n === null) return "—";
   return `${n.toFixed(n >= 10 ? 0 : 1)} mo`;
 }
-function fmtRoic(n: number | null): string {
+function fmtTurns(n: number | null): string {
   if (n === null) return "—";
-  if (n > 150) return ">150%";
-  return `${n.toFixed(1)}%`;
+  return `${n.toFixed(n >= 10 ? 0 : 1)}×`;
 }
 
 export default function BusinessCasePdfTemplate({
@@ -317,12 +316,21 @@ export default function BusinessCasePdfTemplate({
             value={fmtMonths(organic.blendedMonthsToFirstClosing)}
           />
           <StatLine
-            label="Gross margin (blended)"
+            label="Gross margin (reported-equiv)"
             value={fmtPct(organic.blendedGrossMarginPct)}
           />
           <StatLine
-            label="ROIC (blended)"
-            value={fmtRoic(organic.blendedRoicPct)}
+            label="Capital turns / yr"
+            value={fmtTurns(organic.blendedCapitalTurnsPerYear)}
+          />
+          <StatLine
+            label="Cycle contribution (pre-SG&A)"
+            value={fmtPct(organic.blendedCycleContributionPct)}
+          />
+          <StatLine
+            label="Estimated ROIC (post-SG&A)"
+            value={fmtPct(organic.blendedEstimatedRoicPct)}
+            emphasis
           />
           <StatLine
             label="Year-one capital deployed"
@@ -451,7 +459,9 @@ export default function BusinessCasePdfTemplate({
               <Th>Capital / unit</Th>
               <Th>Months</Th>
               <Th>Margin</Th>
-              <Th>ROIC</Th>
+              <Th>Turns</Th>
+              <Th>Cycle</Th>
+              <Th>Est. ROIC</Th>
             </tr>
           </thead>
           <tbody>
@@ -467,11 +477,34 @@ export default function BusinessCasePdfTemplate({
                 <Td>{fmtDollarsFull(b.data.capitalPerUnit)}</Td>
                 <Td>{fmtMonths(b.data.monthsToFirstClosing)}</Td>
                 <Td>{fmtPct(b.data.grossMarginPct)}</Td>
-                <Td>{fmtRoic(b.data.roicPct)}</Td>
+                <Td>{fmtTurns(b.data.capitalTurnsPerYear)}</Td>
+                <Td>{fmtPct(b.data.cycleContributionPct)}</Td>
+                <Td>{fmtPct(b.data.estimatedRoicPct)}</Td>
               </tr>
             ))}
           </tbody>
         </table>
+        <div
+          style={{
+            padding: "6px 12px 8px 12px",
+            borderTop: `1px solid ${C.line}`,
+            background: C.white,
+            fontSize: 8,
+            color: C.muted,
+            lineHeight: 1.4,
+          }}
+        >
+          <strong style={{ color: C.body }}>How to read this table:</strong>{" "}
+          Margin is reported-equivalent gross margin (after a 5-point haircut
+          for commissions, closing costs, and capitalized interest). Turns is
+          capital turns per year for each bucket — finished ~3, raw ~1 because
+          land carries the community, optioned ~4 (NVR-style). Cycle is margin ×
+          turns, PRE-SG&A — the community-level capital efficiency number. Est.
+          ROIC is cycle minus a per-bucket SG&A haircut (finished 8%, raw 10%,
+          optioned 6% at defaults). Don&apos;t confuse Cycle with shareholder
+          ROIC; expect the gap to be 15-30 points of SG&A drag depending on the
+          land strategy.
+        </div>
       </div>
 
       {/* Warnings */}
@@ -525,7 +558,8 @@ export default function BusinessCasePdfTemplate({
       >
         <strong style={{ color: C.body }}>Inputs:</strong>{" "}
         {inputs.landSharePct}% land share · build {inputs.buildCostMultiplier}× ·
-        absorption {inputs.absorptionMultiplier}× ·{" "}
+        absorption {inputs.absorptionMultiplier}× · SG&amp;A{" "}
+        {inputs.sgaMultiplier}× ·{" "}
         {inputs.targetUnitsPerYear.toLocaleString()} units/yr · mix{" "}
         {inputs.landMix.pctFinished}/{inputs.landMix.pctRaw}/
         {inputs.landMix.pctOptioned} finished/raw/optioned · horizontal{" "}
