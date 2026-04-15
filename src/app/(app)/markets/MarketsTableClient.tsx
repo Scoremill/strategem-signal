@@ -111,28 +111,28 @@ export default function MarketsTableClient({ rows, preset }: MarketsTableClientP
       label: "Composite",
       align: "center" as const,
       tooltip:
-        "Composite Portfolio Health Score (0-100). Blend of Financial, Demand, and Operational sub-scores using your current weighting preset. Higher is healthier. Change your preset in Settings.",
+        "The overall health score for this market — a blend of all three sub-scores. Higher is better. Change how the three combine in Settings → Weighting.",
     },
     {
       key: "financial",
       label: "Financial",
       align: "center" as const,
       tooltip:
-        "Financial sub-score (0-100). Affordability runway based on Census ACS median household income and YoY income growth. Higher = more buying power in the market.",
+        "Can buyers here afford your homes? Higher means incomes are rising and residents have real buying power.",
     },
     {
       key: "demand",
       label: "Demand",
       align: "center" as const,
       tooltip:
-        "Demand sub-score (0-100). Composite of Census single-family permits YoY, BLS employment growth, Census net migration, and BLS unemployment (inverted). Higher = stronger growth signals.",
+        "Is this market growing? Higher means permits, jobs, and population are all trending up — people are moving in and the market is expanding.",
     },
     {
       key: "operational",
       label: "Operational",
       align: "center" as const,
       tooltip:
-        "Operational sub-score (0-100). BLS QCEW construction wage growth (inverted — rising wages are bad for margins) and construction trade employment trajectory. Higher = easier to build and complete on schedule.",
+        "How easy is it to actually build here? Higher means trade labor is available and construction wages aren't spiking — your margins and schedule are protected.",
     },
   ];
 
@@ -144,49 +144,49 @@ export default function MarketsTableClient({ rows, preset }: MarketsTableClientP
       label: "Green",
       align: "center" as const,
       tooltip:
-        "Number of the six filters this market passes (score ≥ 60). A '6/6' market would be strong on every dimension; a '3/6' market passes migration and operational but fails affordability, etc. Click any filter cell to see why.",
+        "How many of the six filters this market passes. A 6/6 market is strong on every dimension. A 3/6 market passes on some and fails on others — click any filter cell to see why.",
     },
     {
       key: "filter1",
       label: "Migration",
       align: "center" as const,
       tooltip:
-        "Filter 1 — Migration Tailwinds. Net domestic migration as a share of total population (Census PEP). Rewards metros where people are actually moving in. Normalized on [-0.5%, +1.5%] population change.",
+        "Are people moving here? Higher means the population is actively growing from migration, not just natural births. Your future buyers are arriving.",
     },
     {
       key: "filter2",
       label: "Diversity",
       align: "center" as const,
       tooltip:
-        "Filter 2 — Employment Diversity. Herfindahl-Hirschman Index across 2-digit NAICS private-sector employment (BLS QCEW). Penalizes markets where one sector dominates. Rewards metros where a downturn in any single industry wouldn't sink the economy.",
+        "Is the local economy spread across many industries, or does one sector dominate? Higher means diversified — if one industry takes a hit, the whole market won't collapse with it.",
     },
     {
       key: "filter3",
       label: "Imbalance",
       align: "center" as const,
       tooltip:
-        "Filter 3 — Supply-Demand Imbalance. Population growth vs permit growth (Census BPS vs Census PEP). Rewards markets where demand is running ahead of supply — the 'find under-built metros' lens from the CEO scenario.",
+        "Is demand running ahead of supply? Higher means population is growing faster than new homes are being built — an under-supplied market with room to absorb your inventory.",
     },
     {
       key: "filter4",
-      label: "Competition*",
+      label: "Competition",
       align: "center" as const,
       tooltip:
-        "Filter 4 — Competitive Landscape. Counts the number of public homebuilders operating in the market (via LLM-parsed StrategemOps earnings narratives). Inverted — fewer competitors = higher score = easier organic entry. Stubbed when data is pending.",
+        "How crowded is this market with the big public builders? Higher means fewer of them are here, so less price competition and an easier runway for you to enter.",
     },
     {
       key: "filter5",
-      label: "Affordability*",
+      label: "Affordability",
       align: "center" as const,
       tooltip:
-        "Filter 5 — Affordability Runway. Income growth vs FHFA House Price Index growth. Rewards markets where incomes are outrunning home prices (runway expanding); penalizes bubble-risk markets (HPI climbing too fast) and flat/cooling markets.",
+        "Are incomes keeping up with home prices? Higher means wages are outrunning home price growth — buyers still have runway to afford your homes. Lower means prices are climbing too fast or the market is cooling.",
     },
     {
       key: "filter6",
       label: "Operational",
       align: "center" as const,
       tooltip:
-        "Filter 6 — Operational Feasibility. BLS QCEW construction wage growth (inverted) and trade employment trajectory. Same math as the Portfolio Health Operational sub-score — rewards markets where you can actually complete on schedule.",
+        "Can you actually build here on budget and on schedule? Higher means trade wages are stable and enough construction workers are available. Lower means you'll pay more and wait longer.",
     },
     { key: "watchlist", label: "", align: "center" as const, sortable: false },
   ];
