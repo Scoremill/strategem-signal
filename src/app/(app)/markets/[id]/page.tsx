@@ -251,14 +251,22 @@ export default async function MarketDrilldownPage({ params }: PageProps) {
       </div>
 
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1E293B]">
-          {market.shortName}, {market.state}
-        </h1>
-        <p className="text-sm text-[#6B7280] mt-1">
-          {market.name} · CBSA {market.cbsaFips}
-          {snapshotDate && ` · Snapshot ${snapshotDate}`}
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[#1E293B]">
+            {market.shortName}, {market.state}
+          </h1>
+          <p className="text-sm text-[#6B7280] mt-1">
+            {market.name} · CBSA {market.cbsaFips}
+            {snapshotDate && ` · Snapshot ${snapshotDate}`}
+          </p>
+        </div>
+        <Link
+          href={`/markets/${market.id}/business-case`}
+          className="shrink-0 rounded-lg bg-[#F97316] hover:bg-[#EA580C] px-4 py-2 text-xs font-semibold text-white transition-colors"
+        >
+          Business Case →
+        </Link>
       </div>
 
       {/*

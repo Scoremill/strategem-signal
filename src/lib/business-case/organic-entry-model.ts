@@ -76,13 +76,21 @@ const HEALTHY_MARGIN_THRESHOLD_PCT = 18;
 
 /**
  * QCEW gives us construction sector avg weekly wage. To convert to a
- * per-unit build cost we assume a 2,200 sqft median home, $140/sqft
- * base, and a regional multiplier derived from the wage level
- * relative to a $1,200 national median.
+ * per-unit base build cost we anchor to NAHB's 2024 Cost of
+ * Constructing a Home survey: $162K average hard cost on a 2,561 sqft
+ * median — roughly $63/sqft. We use $70/sqft × 2,500 sqft = $175K as
+ * a slightly-forward national baseline for the Phase 3 model.
+ *
+ * Labor is ~40% of total hard cost per NAHB. So a market whose wage
+ * index is 1.3x the national median increases build cost by
+ * (0.4 × 0.3) = 12%, NOT 30%. The regional multiplier below
+ * implements that labor-share weighting.
  */
-const BASE_BUILD_COST_PER_SQFT = 140;
-const MEDIAN_HOME_SQFT = 2200;
-const NATIONAL_MEDIAN_CONSTRUCTION_WEEKLY_WAGE = 1200;
+const BASE_BUILD_COST_PER_SQFT = 70;
+const MEDIAN_HOME_SQFT = 2500;
+const NATIONAL_MEDIAN_CONSTRUCTION_WEEKLY_WAGE = 1300;
+/** Labor's share of total hard cost per NAHB Cost of Constructing. */
+const LABOR_SHARE_OF_BUILD_COST = 0.4;
 
 // ─── Raw inputs shape ─────────────────────────────────────────────
 
@@ -102,11 +110,16 @@ export interface OrganicRawInputs {
 // ─── Helpers ──────────────────────────────────────────────────────
 
 function computeBaseBuildCost(wageValue: number | null): number {
+  const nationalBase = BASE_BUILD_COST_PER_SQFT * MEDIAN_HOME_SQFT;
   if (wageValue === null || !Number.isFinite(wageValue) || wageValue <= 0) {
-    return BASE_BUILD_COST_PER_SQFT * MEDIAN_HOME_SQFT;
+    return nationalBase;
   }
-  const wageMultiplier = wageValue / NATIONAL_MEDIAN_CONSTRUCTION_WEEKLY_WAGE;
-  return BASE_BUILD_COST_PER_SQFT * MEDIAN_HOME_SQFT * wageMultiplier;
+  // Only the labor share of the base cost scales with the wage
+  // differential. The materials share (1 - LABOR_SHARE) stays flat.
+  const wageRatio = wageValue / NATIONAL_MEDIAN_CONSTRUCTION_WEEKLY_WAGE;
+  const regionalMultiplier =
+    (1 - LABOR_SHARE_OF_BUILD_COST) + LABOR_SHARE_OF_BUILD_COST * wageRatio;
+  return nationalBase * regionalMultiplier;
 }
 
 function computeCarryCost(capital: number, months: number): number {
