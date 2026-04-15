@@ -19,7 +19,6 @@ import {
   type PortfolioHealthInputs,
   type MarketOpportunityBlurbInputs,
 } from "../src/lib/narrative/market-narrative";
-import { resolvePreset } from "../src/lib/scoring/weight-presets";
 
 function toNumber(v: unknown): number | null {
   if (v == null) return null;
@@ -34,33 +33,12 @@ function toYmd(v: unknown): string | null {
   return null;
 }
 
-function blendComposite(
-  f: number | null,
-  d: number | null,
-  o: number | null,
-  weights: { financial: number; demand: number; operational: number }
-): number | null {
-  const parts: Array<[number, number]> = [];
-  if (f != null) parts.push([f, weights.financial]);
-  if (d != null) parts.push([d, weights.demand]);
-  if (o != null) parts.push([o, weights.operational]);
-  if (parts.length === 0) return null;
-  let sum = 0;
-  let wsum = 0;
-  for (const [s, w] of parts) {
-    sum += s * w;
-    wsum += w;
-  }
-  return wsum > 0 ? sum / wsum : null;
-}
-
 async function main() {
   const startedAt = Date.now();
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY not set");
   const client = new OpenAI({ apiKey });
 
-  const defaultPreset = resolvePreset("balanced");
   const geos = await db.select().from(geographies).where(eq(geographies.isActive, true));
   console.log(`[generate-narratives] ${geos.length} active markets`);
 
@@ -102,16 +80,13 @@ async function main() {
     const financial = healthRow ? toNumber(healthRow.financialScore) : null;
     const demand = healthRow ? toNumber(healthRow.demandScore) : null;
     const operational = healthRow ? toNumber(healthRow.operationalScore) : null;
-    const composite = blendComposite(financial, demand, operational, defaultPreset.weights);
 
     const portfolioInputs: PortfolioHealthInputs = {
       shortName: g.shortName,
       state: g.state,
-      composite,
       financial,
       demand,
       operational,
-      weightingPreset: defaultPreset.label,
     };
 
     const opportunityInputs: MarketOpportunityBlurbInputs = {

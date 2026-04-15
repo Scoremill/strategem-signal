@@ -22,7 +22,6 @@ import {
   type PortfolioHealthInputs,
   type MarketOpportunityBlurbInputs,
 } from "@/lib/narrative/market-narrative";
-import { resolvePreset } from "@/lib/scoring/weight-presets";
 
 export interface MarketNarrativesResult {
   marketsProcessed: number;
@@ -45,26 +44,6 @@ function toYmd(v: unknown): string | null {
   return null;
 }
 
-function blendComposite(
-  f: number | null,
-  d: number | null,
-  o: number | null,
-  weights: { financial: number; demand: number; operational: number }
-): number | null {
-  const parts: Array<[number, number]> = [];
-  if (f != null) parts.push([f, weights.financial]);
-  if (d != null) parts.push([d, weights.demand]);
-  if (o != null) parts.push([o, weights.operational]);
-  if (parts.length === 0) return null;
-  let sum = 0;
-  let wsum = 0;
-  for (const [s, w] of parts) {
-    sum += s * w;
-    wsum += w;
-  }
-  return wsum > 0 ? sum / wsum : null;
-}
-
 export async function runMarketNarrativesPipeline(): Promise<MarketNarrativesResult> {
   const startedAt = Date.now();
   const result: MarketNarrativesResult = {
@@ -82,7 +61,6 @@ export async function runMarketNarrativesPipeline(): Promise<MarketNarrativesRes
   }
   const client = new OpenAI({ apiKey });
 
-  const defaultPreset = resolvePreset("balanced");
   const geos = await db
     .select()
     .from(geographies)
@@ -125,16 +103,13 @@ export async function runMarketNarrativesPipeline(): Promise<MarketNarrativesRes
     const financial = healthRow ? toNumber(healthRow.financialScore) : null;
     const demand = healthRow ? toNumber(healthRow.demandScore) : null;
     const operational = healthRow ? toNumber(healthRow.operationalScore) : null;
-    const composite = blendComposite(financial, demand, operational, defaultPreset.weights);
 
     const portfolioInputs: PortfolioHealthInputs = {
       shortName: g.shortName,
       state: g.state,
-      composite,
       financial,
       demand,
       operational,
-      weightingPreset: defaultPreset.label,
     };
     const opportunityInputs: MarketOpportunityBlurbInputs = {
       shortName: g.shortName,

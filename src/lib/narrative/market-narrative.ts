@@ -18,14 +18,22 @@
  */
 import OpenAI from "openai";
 
+/**
+ * Portfolio Health inputs for the narrative generator. Deliberately
+ * does NOT include the composite score or the weighting preset —
+ * the composite the user sees on the dot depends on their personal
+ * preset, which can differ across users and change anytime. The
+ * narrative is generated once per snapshot and stored shared, so
+ * it needs to describe the underlying sub-scores only. The composite
+ * visible on the dot is the authoritative number; the blurb
+ * explains the components that make it up.
+ */
 export interface PortfolioHealthInputs {
   shortName: string;
   state: string;
-  composite: number | null;
   financial: number | null;
   demand: number | null;
   operational: number | null;
-  weightingPreset: string;
 }
 
 export interface MarketOpportunityBlurbInputs {
@@ -53,7 +61,8 @@ Hard rules:
 - Describe what the scores ARE, never what the CEO should DO. Forbidden words: "should", "recommend", "advise", "suggest", "consider", "opportunity for you", "we think", "promising", "attractive", "great", "best", "worst".
 - No predictions. Forbidden phrases: "will grow", "expected to", "likely to", "future", "forecast".
 - Use plain English a non-technical reader gets on one pass. No jargon, no index names, no formula names.
-- Lead with the headline number, then the supporting inputs that drove it. "The composite is X. That reflects [high/low] Financial at Y because incomes are rising, and [high/low] Demand at Z because permits are up/down N%."
+- NEVER cite a composite or overall score. The composite depends on the user's personal weighting preset and can differ for each user looking at the same market. Only describe the individual sub-scores and filters you are given. If you are tempted to write "the composite is X" or "overall score" or "Market X scores Y out of 100", STOP. Describe the components instead.
+- Lead with the components, not a total. Portfolio Health: "Financial is high at X because incomes are rising; Demand is moderate at Y because permits are down N%; Operational is weak at Z because trade wages are spiking." Market Opportunity: "4 of 6 filters pass. Migration is strong at X, Diversity at Y, but Competition is low because 13 public builders operate here."
 - When a score is notably high or low, say WHY in plain terms (e.g. "affordability is strong because incomes are outrunning home prices", not "affordability runway trajectory is positive").
 - When multiple scores pull in opposite directions, name the tension factually. "Demand is strong but operational is tight."
 - Never invent data not in the inputs. If a sub-score is null, say "data is pending" or omit it entirely.
@@ -64,11 +73,10 @@ Your output must be valid JSON with exactly two keys: portfolioHealth (string) a
 function describePortfolioHealthInputs(i: PortfolioHealthInputs): string {
   const parts: string[] = [];
   parts.push(`Market: ${i.shortName}, ${i.state}`);
-  parts.push(`Weighting preset: ${i.weightingPreset}`);
-  parts.push(`Composite score: ${i.composite != null ? i.composite.toFixed(0) : "null"} out of 100`);
   parts.push(`Financial sub-score (buying power / income growth): ${i.financial != null ? i.financial.toFixed(0) : "null"}`);
   parts.push(`Demand sub-score (permits, jobs, migration, unemployment): ${i.demand != null ? i.demand.toFixed(0) : "null"}`);
   parts.push(`Operational sub-score (trade wages, construction labor availability): ${i.operational != null ? i.operational.toFixed(0) : "null"}`);
+  parts.push(`NOTE: Do NOT compute or cite a composite/overall score. Describe these three sub-scores only.`);
   return parts.join("\n");
 }
 
