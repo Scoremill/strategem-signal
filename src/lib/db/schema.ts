@@ -454,6 +454,35 @@ export const opsBuilderMarkets = pgTable("ops_builder_markets", {
   index("idx_ops_builder_markets_ticker").on(table.builderTicker),
 ]);
 
+// ─── Zillow Home Value Index (ZHVI) ─────────────────────────────
+//
+// Metro-level median home value in dollars, published monthly by
+// Zillow. Used by the Phase 3 Organic Entry Model to estimate land
+// basis per metro (finished home price × land-share-of-home ratio).
+//
+// Zillow publishes a single CSV keyed by their internal RegionID.
+// We match to our geographies by first-city + state on the
+// RegionName field since Zillow doesn't expose CBSA FIPS. A small
+// override table in the pipeline handles the ~5 metros where the
+// first-city match fails (Boise→Boise City, Dayton-Kettering→Dayton,
+// etc.). Puerto Rico metros are not covered by Zillow and are a
+// known gap consistent with FHFA.
+//
+// Unlike the FHFA HPI table which stores an index, this table stores
+// actual dollar prices. The Phase 3 model needs real dollars to
+// compute land cost per unit, so ZHVI is the right source.
+export const zillowZhvi = pgTable("zillow_zhvi", {
+  id: text("id").primaryKey(), // UUID
+  geographyId: text("geography_id").notNull().references(() => geographies.id, { onDelete: "cascade" }),
+  periodDate: date("period_date").notNull(), // month-end date from Zillow header
+  medianHomeValue: integer("median_home_value").notNull(), // dollars
+  source: text("source").default("zillow_zhvi_metro").notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_zillow_zhvi_geo_period").on(table.geographyId, table.periodDate),
+  index("idx_zillow_zhvi_geo").on(table.geographyId),
+]);
+
 // ─── FHFA House Price Index ──────────────────────────────────────
 //
 // Quarterly home price index from the Federal Housing Finance Agency.
