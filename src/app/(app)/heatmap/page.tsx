@@ -20,6 +20,7 @@ import {
   trackedMarkets,
   healthScoreWeights,
   portfolioHealthSnapshots,
+  marketNarratives,
 } from "@/lib/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
@@ -78,6 +79,26 @@ export default async function HeatmapPage() {
     );
   const snapshotByGeo = new Map(snapshotRows.map((r) => [r.geographyId, r]));
 
+  // 4b. Pull the latest narrative per geography. Uses the same
+  //     per-market MAX(snapshot_date) pattern so narratives and
+  //     scores stay aligned even when refresh runs are partial.
+  const narrativeRows = await db
+    .select({
+      geographyId: marketNarratives.geographyId,
+      portfolioHealthBlurb: marketNarratives.portfolioHealthBlurb,
+    })
+    .from(marketNarratives)
+    .where(
+      sql`(${marketNarratives.geographyId}, ${marketNarratives.snapshotDate}) IN (
+        SELECT geography_id, MAX(snapshot_date)
+        FROM market_narratives
+        GROUP BY geography_id
+      )`
+    );
+  const narrativeByGeo = new Map(
+    narrativeRows.map((r) => [r.geographyId, r.portfolioHealthBlurb])
+  );
+
   // 5. Shape the points for the client component. Composite is computed
   //    client-side from the three stored sub-scores using the user's
   //    preset, so a preset change doesn't require a re-fetch.
@@ -95,6 +116,7 @@ export default async function HeatmapPage() {
       demand: snap?.demandScore != null ? parseFloat(String(snap.demandScore)) : null,
       operational: snap?.operationalScore != null ? parseFloat(String(snap.operationalScore)) : null,
       snapshotDate: toYmd(snap?.snapshotDate),
+      narrative: narrativeByGeo.get(g.id) ?? null,
     };
   });
 

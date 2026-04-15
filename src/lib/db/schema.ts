@@ -560,7 +560,36 @@ export const marketOpportunityScores = pgTable("market_opportunity_scores", {
   index("idx_market_opp_num_green").on(table.numGreen),
 ]);
 
-// ─── Cached Narratives ───────────────────────────────────────────
+// ─── Market Narratives ──────────────────────────────────────────
+//
+// Short LLM-generated blurbs that NARRATE the underlying data for a
+// market — two or three sentences apiece, neutral and factual. Two
+// blurbs per row: one for the Portfolio Health composite + sub-scores,
+// one for the six-filter Market Opportunity read.
+//
+// CEO-defensibility is the whole point. The prompt is strict: describe
+// the inputs, never recommend, never editorialize. "Dallas scores 72
+// composite, driven by strong affordability and steady demand; permits
+// are down 12% YoY which is dragging the operational sub-score."
+//
+// Refreshed by the same monthly cron that re-scores markets, so the
+// narratives stay in lockstep with the data they describe. Rendered
+// in the heatmap popup (Portfolio Health blurb only, for space) and
+// at the top of the /markets/[id] drilldown (both blurbs).
+export const marketNarratives = pgTable("market_narratives", {
+  id: text("id").primaryKey(), // UUID
+  geographyId: text("geography_id").notNull().references(() => geographies.id, { onDelete: "cascade" }),
+  snapshotDate: date("snapshot_date").notNull(),
+  portfolioHealthBlurb: text("portfolio_health_blurb"),
+  marketOpportunityBlurb: text("market_opportunity_blurb"),
+  model: text("model").default("gpt-4.1").notNull(),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_market_narratives_geo_date").on(table.geographyId, table.snapshotDate),
+  index("idx_market_narratives_geo").on(table.geographyId),
+]);
+
+// ─── Cached Narratives (legacy) ─────────────────────────────────
 //
 // Removed in v2 Phase 0.7. The v1 narratives table held LLM-generated
 // market and portfolio summaries that synthesized the composite scoring

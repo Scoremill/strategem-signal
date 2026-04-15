@@ -16,6 +16,10 @@ export interface MarketHealthPoint {
   demand: number | null;
   operational: number | null;
   snapshotDate: string | null;
+  /** Cached Portfolio Health narrative from market_narratives. 2-3
+   *  plain-English sentences that narrate the underlying scores.
+   *  Generated monthly by the portfolio-health cron. */
+  narrative: string | null;
 }
 
 interface HeatmapClientProps {
@@ -51,6 +55,20 @@ function blendComposite(
     wsum += w;
   }
   return wsum > 0 ? sum / wsum : null;
+}
+
+/**
+ * Escape a string for safe interpolation into popup HTML. Market
+ * names and LLM-generated narratives can contain characters that
+ * would otherwise break the markup or open an XSS vector.
+ */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /**
@@ -161,16 +179,21 @@ export default function HeatmapClient({
         const demandLabel = m.demand != null ? m.demand.toFixed(0) : "—";
         const operationalLabel = m.operational != null ? m.operational.toFixed(0) : "—";
         const compositeColorValue = compositeColor(m.composite);
-        popup = new mapboxgl.Popup({ offset: 15, maxWidth: "260px" }).setHTML(`
-          <div style="font-family: system-ui; min-width: 220px;">
-            <div style="font-weight: 700; font-size: 14px; color: #1E293B;">${m.shortName}, ${m.state}</div>
+        const safeTitle = `${escapeHtml(m.shortName)}, ${escapeHtml(m.state)}`;
+        const safePresetLabel = escapeHtml(preset.label);
+        const safeNarrative = m.narrative ? escapeHtml(m.narrative) : "";
+        const safeSnapshot = m.snapshotDate ? escapeHtml(m.snapshotDate) : "";
+        popup = new mapboxgl.Popup({ offset: 15, maxWidth: "320px" }).setHTML(`
+          <div style="font-family: system-ui; min-width: 260px; max-width: 300px;">
+            <div style="font-weight: 700; font-size: 14px; color: #1E293B;">${safeTitle}</div>
             <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
               <span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: ${compositeColorValue}; color: white; font-size: 15px; font-weight: 700;">${compositeLabel}</span>
               <div>
                 <div style="font-size: 11px; text-transform: uppercase; color: #6B7280; letter-spacing: 0.5px;">Composite</div>
-                <div style="font-size: 11px; color: #4B5563;">${preset.label} weighting</div>
+                <div style="font-size: 11px; color: #4B5563;">${safePresetLabel} weighting</div>
               </div>
             </div>
+            ${safeNarrative ? `<div style="margin-top: 10px; padding: 8px 10px; background: #F9FAFB; border-left: 3px solid #F97316; border-radius: 4px; font-size: 12px; color: #1E293B; line-height: 1.5;">${safeNarrative}</div>` : ""}
             <div style="margin-top: 10px; border-top: 1px solid #E5E7EB; padding-top: 8px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
               <div>
                 <div style="font-size: 10px; text-transform: uppercase; color: #6B7280;">Financial</div>
@@ -185,7 +208,7 @@ export default function HeatmapClient({
                 <div style="font-size: 14px; font-weight: 700; color: #1E293B;">${operationalLabel}</div>
               </div>
             </div>
-            ${m.snapshotDate ? `<div style="margin-top: 8px; font-size: 10px; color: #9CA3AF;">Snapshot ${m.snapshotDate}</div>` : ""}
+            ${safeSnapshot ? `<div style="margin-top: 8px; font-size: 10px; color: #9CA3AF;">Snapshot ${safeSnapshot}</div>` : ""}
           </div>
         `);
       }

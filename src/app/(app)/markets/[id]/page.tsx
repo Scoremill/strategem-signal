@@ -19,6 +19,7 @@ import {
   geographies,
   healthScoreWeights,
   portfolioHealthSnapshots,
+  marketNarratives,
 } from "@/lib/db/schema";
 import { and, eq, desc } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
@@ -211,6 +212,15 @@ export default async function MarketDrilldownPage({ params }: PageProps) {
     .orderBy(desc(portfolioHealthSnapshots.snapshotDate))
     .limit(1);
 
+  // Latest cached narrative for this market (if any). Refreshed
+  // monthly by the portfolio-health cron.
+  const [narrative] = await db
+    .select()
+    .from(marketNarratives)
+    .where(eq(marketNarratives.geographyId, market.id))
+    .orderBy(desc(marketNarratives.snapshotDate))
+    .limit(1);
+
   const financial =
     snap?.financialScore != null ? parseFloat(String(snap.financialScore)) : null;
   const demand =
@@ -235,8 +245,8 @@ export default async function MarketDrilldownPage({ params }: PageProps) {
     <div className="p-4 sm:p-8 max-w-5xl">
       {/* Breadcrumb / back link */}
       <div className="mb-4 flex items-center gap-2 text-xs text-[#6B7280]">
-        <Link href="/rankings" className="hover:text-[#1E293B] transition-colors">
-          ← Rankings
+        <Link href="/markets" className="hover:text-[#1E293B] transition-colors">
+          ← Markets
         </Link>
       </div>
 
@@ -250,6 +260,38 @@ export default async function MarketDrilldownPage({ params }: PageProps) {
           {snapshotDate && ` · Snapshot ${snapshotDate}`}
         </p>
       </div>
+
+      {/*
+        Narrative block — two short plain-English blurbs that narrate
+        the underlying data. Designed for board-room defensibility:
+        the blurbs describe the inputs, they never recommend a
+        decision. Both blurbs render if available; a single blurb
+        renders solo. The block is omitted entirely if neither exists.
+      */}
+      {narrative && (narrative.portfolioHealthBlurb || narrative.marketOpportunityBlurb) && (
+        <div className="mb-6 space-y-3">
+          {narrative.portfolioHealthBlurb && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-2">
+                Portfolio Health
+              </p>
+              <p className="text-sm text-[#1E293B] leading-relaxed">
+                {narrative.portfolioHealthBlurb}
+              </p>
+            </div>
+          )}
+          {narrative.marketOpportunityBlurb && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-2">
+                Market Opportunity
+              </p>
+              <p className="text-sm text-[#1E293B] leading-relaxed">
+                {narrative.marketOpportunityBlurb}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {!snap ? (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-amber-900">
