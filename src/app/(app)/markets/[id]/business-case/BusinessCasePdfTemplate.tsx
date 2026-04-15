@@ -172,6 +172,21 @@ export default function BusinessCasePdfTemplate({
             >
               {marketLabel}
             </div>
+            <div
+              style={{
+                fontSize: 9,
+                color: C.muted,
+                marginTop: 2,
+              }}
+            >
+              {organic.tierLabel} · defaults:{" "}
+              {organic.assumptions.medianHomeSqft?.toLocaleString() ?? "—"} sqft
+              · ${organic.assumptions.baseBuildCostPerSqft ?? "—"}/sqft base ·
+              {" "}
+              {organic.assumptions.newConstructionPremium != null
+                ? `+${Math.round((organic.assumptions.newConstructionPremium - 1) * 100)}% new-construction premium`
+                : ""}
+            </div>
           </div>
           <div
             style={{
@@ -249,7 +264,11 @@ export default function BusinessCasePdfTemplate({
         <KpiTile
           label="Projected sale price"
           value={fmtDollarsFull(organic.assumptions.projectedSalePrice)}
-          sub="+5% new-construction premium"
+          sub={
+            organic.assumptions.newConstructionPremium != null
+              ? `+${Math.round((organic.assumptions.newConstructionPremium - 1) * 100)}% new-construction premium`
+              : "New-construction premium"
+          }
         />
         <KpiTile
           label="Raw land per unit"
@@ -259,7 +278,12 @@ export default function BusinessCasePdfTemplate({
         <KpiTile
           label="Base build cost"
           value={fmtDollarsFull(organic.assumptions.baseBuildCost)}
-          sub="QCEW-derived · 2,500 sqft"
+          sub={
+            organic.assumptions.medianHomeSqft != null &&
+            organic.assumptions.baseBuildCostPerSqft != null
+              ? `$${organic.assumptions.baseBuildCostPerSqft}/sqft × ${organic.assumptions.medianHomeSqft.toLocaleString()} sqft (QCEW-adj)`
+              : "QCEW-derived"
+          }
         />
       </div>
 

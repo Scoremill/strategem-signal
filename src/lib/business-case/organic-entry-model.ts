@@ -35,10 +35,11 @@
  *      Zillow ZHVI and QCEW, formats them as OrganicRawInputs, and
  *      passes them in. Makes the math trivially testable.
  */
-import type {
-  BusinessCaseInputs,
-  OrganicBucketOutput,
-  OrganicOutput,
+import {
+  classifyMarketTier,
+  type BusinessCaseInputs,
+  type OrganicBucketOutput,
+  type OrganicOutput,
 } from "./types";
 
 // ─── Constants (calibrated defaults) ──────────────────────────────
@@ -54,31 +55,34 @@ const MONTHS_TO_FIRST_CLOSING = {
 } as const;
 
 /**
- * Capital turns per year, per bucket. This is NOT 12 / months-to-first-
- * closing — that would be an annualization trick. Real community-level
- * turns depend on how long capital stays locked into the LAND portion
- * of the basis:
+ * Capital turns per year, per bucket. NOT 12 / months-to-first-closing
+ * — that would be an annualization trick. Real community-level turns
+ * depend on how long capital stays locked into the LAND portion of
+ * the basis, with friction between cycles that prevents the idealized
+ * 12/months number:
  *
- *   - Finished lots: ~3 turns. Vertical cycle is ~4 months, and because
- *     you bought finished lots you can redeploy the capital into new
- *     lots each cycle. Slightly below the raw 12/4 ideal because of
- *     absorption friction between cycles (permits, sales cadence).
+ *   - Finished lots: ~2.5 turns. Vertical cycle is ~4 months but you
+ *     can't redeploy that dollar instantly — there's 1-2 months of
+ *     permit/sales friction between each cycle and builders typically
+ *     don't run 100% utilization on their land position.
  *
  *   - Raw land: ~1 turn. Land sits on the balance sheet through the
- *     full development + absorption arc of a community (~3-4 years for
- *     a 150-unit community at 40 closings/yr). Capital is effectively
- *     NOT recycled — you close home after home out of the same basis.
+ *     full development + absorption arc of a community (~3-4 years
+ *     for a 150-unit community at 40 closings/yr). Capital is
+ *     effectively NOT recycled — you close home after home out of
+ *     the same basis.
  *
- *   - Optioned: ~4 turns. NVR-style. Land never hits the balance sheet
- *     until takedown, so your capital is dominated by vertical, which
- *     cycles as fast as you can build + sell. This is the number NVR
- *     reports in their community-level economics and is the reason
- *     they earn 30%+ ROIC consistently.
+ *   - Optioned: ~3 turns. NVR-style. Land never hits the balance
+ *     sheet until takedown, so your capital is dominated by vertical,
+ *     which cycles fast. NVR's actual reported turns at the business
+ *     level are ~2-2.5x, so 3 is a slightly generous bucket-level
+ *     assumption that the slider lets the CEO pull down if their
+ *     model is tighter.
  */
 const DEFAULT_CAPITAL_TURNS_PER_YEAR = {
-  finished: 3,
+  finished: 2.5,
   raw: 1,
-  optioned: 4,
+  optioned: 3,
 } as const;
 
 /**
@@ -122,13 +126,6 @@ const DEFAULT_SGA_PCT_BY_BUCKET = {
 const ANNUAL_CARRY_COST_PCT = 0.08;
 
 /**
- * Projected sale price = median home price × this premium. New
- * construction typically sells at a 5% premium to the median existing-
- * home sale price in the same metro, per NAHB.
- */
-const NEW_CONSTRUCTION_PREMIUM = 1.05;
-
-/**
  * Target gross margin assumption for the sale price projection. We
  * don't use this to back into sale price — we use it to flag buckets
  * whose actual computed margin falls below this threshold. Healthy
@@ -137,21 +134,12 @@ const NEW_CONSTRUCTION_PREMIUM = 1.05;
 const HEALTHY_MARGIN_THRESHOLD_PCT = 16;
 
 /**
- * QCEW gives us construction sector avg weekly wage. To convert to a
- * per-unit base build cost we anchor to NAHB's 2024 Cost of
- * Constructing a Home survey: $162K average hard cost on a 2,561 sqft
- * median — roughly $63/sqft. We use $70/sqft × 2,500 sqft = $175K as
- * a slightly-forward national baseline for the Phase 3 model.
- *
- * Labor is ~40% of total hard cost per NAHB. So a market whose wage
- * index is 1.3x the national median increases build cost by
- * (0.4 × 0.3) = 12%, NOT 30%. The regional multiplier below
- * implements that labor-share weighting.
+ * National median construction wage used for the regional wage
+ * multiplier. Wages above this pull build cost up; wages below pull
+ * it down. Labor is ~40% of total hard cost per NAHB Cost of
+ * Constructing, so the wage adjustment is scaled by that share.
  */
-const BASE_BUILD_COST_PER_SQFT = 70;
-const MEDIAN_HOME_SQFT = 2500;
 const NATIONAL_MEDIAN_CONSTRUCTION_WEEKLY_WAGE = 1300;
-/** Labor's share of total hard cost per NAHB Cost of Constructing. */
 const LABOR_SHARE_OF_BUILD_COST = 0.4;
 
 // ─── Raw inputs shape ─────────────────────────────────────────────
@@ -171,17 +159,28 @@ export interface OrganicRawInputs {
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
-function computeBaseBuildCost(wageValue: number | null): number {
-  const nationalBase = BASE_BUILD_COST_PER_SQFT * MEDIAN_HOME_SQFT;
+function computeBaseBuildCost(
+  wageValue: number | null,
+  sqft: number,
+  baseRatePerSqft: number
+): number {
+  const tierBase = baseRatePerSqft * sqft;
   if (wageValue === null || !Number.isFinite(wageValue) || wageValue <= 0) {
-    return nationalBase;
+    return tierBase;
   }
   // Only the labor share of the base cost scales with the wage
   // differential. The materials share (1 - LABOR_SHARE) stays flat.
   const wageRatio = wageValue / NATIONAL_MEDIAN_CONSTRUCTION_WEEKLY_WAGE;
-  const regionalMultiplier =
+  const rawMultiplier =
     (1 - LABOR_SHARE_OF_BUILD_COST) + LABOR_SHARE_OF_BUILD_COST * wageRatio;
-  return nationalBase * regionalMultiplier;
+  // Floor at 0.95. Wages below the national median don't cut build
+  // cost proportionally — materials are roughly national, haul
+  // distances are longer in cheap markets, and small trade pools
+  // push up costs. Cap at 1.25 on the upside: a 2x wage index in a
+  // coastal metro doesn't double build cost, it compresses at the
+  // top end as builders substitute less-labor-intensive methods.
+  const regionalMultiplier = Math.max(0.95, Math.min(1.25, rawMultiplier));
+  return tierBase * regionalMultiplier;
 }
 
 function computeCarryCost(capital: number, months: number): number {
@@ -244,10 +243,13 @@ function deriveReturnMetrics(
   estimatedRoicPct: number;
   sgaPct: number;
 } {
-  const reported = Math.max(
-    0,
-    grossMarginRawPct - GROSS_MARGIN_HAIRCUT_PCT
-  );
+  // Apply the 5-point haircut for commissions, closing, capitalized
+  // interest. DO NOT clamp to zero — a negative margin is a real
+  // signal that the market doesn't support vertical construction at
+  // the current inputs, and hiding it would mislead the CEO. No one
+  // enters a market with long-term negative margins, so the honest
+  // read has to flow through.
+  const reported = grossMarginRawPct - GROSS_MARGIN_HAIRCUT_PCT;
   const turns = DEFAULT_CAPITAL_TURNS_PER_YEAR[bucket];
   const cycleContribution = reported * turns;
   // SG&A is a percentage of REVENUE, so to subtract it from a
@@ -434,13 +436,22 @@ export function computeOrganicEntry(
     return emptyOrganicOutput(inputs, warnings, raw);
   }
 
+  // Classify the market tier from the median home price. The tier
+  // drives sqft, base build cost, and the new-construction premium —
+  // all of which vary materially by metro size/cost (Phase 3.10).
+  const tierDefaults = classifyMarketTier(medianPrice);
+
   const rawLandCostPerUnit = medianPrice * (inputs.landSharePct / 100);
-  const baseBuildCost = computeBaseBuildCost(raw.constructionAvgWeeklyWage.value);
-  const projectedSalePrice = medianPrice * NEW_CONSTRUCTION_PREMIUM;
+  const baseBuildCost = computeBaseBuildCost(
+    raw.constructionAvgWeeklyWage.value,
+    tierDefaults.medianHomeSqft,
+    tierDefaults.baseBuildCostPerSqft
+  );
+  const projectedSalePrice = medianPrice * tierDefaults.newConstructionPremium;
 
   if (raw.constructionAvgWeeklyWage.value === null) {
     warnings.push(
-      "QCEW construction wage unavailable for this market. Base build cost reverts to the national default."
+      "QCEW construction wage unavailable for this market. Base build cost reverts to the tier default."
     );
   }
 
@@ -513,6 +524,8 @@ export function computeOrganicEntry(
   }
 
   return {
+    tier: tierDefaults.tier,
+    tierLabel: tierDefaults.label,
     blendedCapitalPerUnit:
       blendedCapitalPerUnit !== null
         ? Math.round(blendedCapitalPerUnit)
@@ -551,6 +564,9 @@ export function computeOrganicEntry(
         computeCarryCost(rawLandCostPerUnit + baseBuildCost, 12)
       ),
       projectedSalePrice: Math.round(projectedSalePrice),
+      medianHomeSqft: tierDefaults.medianHomeSqft,
+      baseBuildCostPerSqft: tierDefaults.baseBuildCostPerSqft,
+      newConstructionPremium: tierDefaults.newConstructionPremium,
     },
     warnings,
   };
@@ -561,7 +577,10 @@ function emptyOrganicOutput(
   warnings: string[],
   raw: OrganicRawInputs
 ): OrganicOutput {
+  const fallbackTier = classifyMarketTier(null);
   return {
+    tier: fallbackTier.tier,
+    tierLabel: fallbackTier.label,
     blendedCapitalPerUnit: null,
     blendedMonthsToFirstClosing: null,
     blendedGrossMarginPct: null,
@@ -580,6 +599,9 @@ function emptyOrganicOutput(
       baseBuildCost: null,
       carryingCostPerUnit: null,
       projectedSalePrice: null,
+      medianHomeSqft: null,
+      baseBuildCostPerSqft: null,
+      newConstructionPremium: null,
     },
     warnings,
   };

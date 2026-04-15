@@ -27,6 +27,106 @@ export interface LandMix {
   pctOptioned: number;
 }
 
+/**
+ * Market tier classification, set automatically from the market's
+ * median home price. Drives the calibrated defaults for square
+ * footage, land share, base build cost, and new-construction
+ * premium — each of these varies meaningfully by metro tier and
+ * applying Atlanta-grade defaults to Jackson produced nonsense
+ * (Phase 3.10 fix).
+ *
+ * Four tiers:
+ *   A — Low cost (<$250k): small southern/midwest metros
+ *   B — Mid cost ($250-550k): Tier 2 Sun Belt metros
+ *   C — High cost ($550-900k): West-coast mainland, coastal FL
+ *   D — Ultra-high cost (>$900k): coastal CA, NYC, Boston
+ */
+export type MarketTier = "A" | "B" | "C" | "D";
+
+export interface MarketTierDefaults {
+  tier: MarketTier;
+  /** Human-readable label for the UI chip. */
+  label: string;
+  /** Median home square footage for this tier. */
+  medianHomeSqft: number;
+  /** Default raw land share as % of sale price. */
+  landSharePct: number;
+  /** Base build cost $/sqft at the national-median construction wage. */
+  baseBuildCostPerSqft: number;
+  /**
+   * New-construction sale premium over the Zillow ZHVI existing-home
+   * median. Larger in small metros where the existing stock is old
+   * and small, shrinking toward 5% in coastal metros where the
+   * existing stock is closer in age + size to new construction.
+   */
+  newConstructionPremium: number;
+  /** Minimum ZHVI median (inclusive) for this tier, in dollars. */
+  zhviMin: number;
+  /** Maximum ZHVI median (exclusive) for this tier, in dollars. */
+  zhviMax: number;
+}
+
+export const MARKET_TIERS: Record<MarketTier, MarketTierDefaults> = {
+  A: {
+    tier: "A",
+    label: "Tier A · Low cost",
+    medianHomeSqft: 1800,
+    landSharePct: 15,
+    baseBuildCostPerSqft: 75,
+    newConstructionPremium: 1.15,
+    zhviMin: 0,
+    zhviMax: 250000,
+  },
+  B: {
+    tier: "B",
+    label: "Tier B · Mid cost",
+    medianHomeSqft: 2200,
+    landSharePct: 22,
+    baseBuildCostPerSqft: 78,
+    newConstructionPremium: 1.08,
+    zhviMin: 250000,
+    zhviMax: 550000,
+  },
+  C: {
+    tier: "C",
+    label: "Tier C · High cost",
+    medianHomeSqft: 2500,
+    landSharePct: 30,
+    baseBuildCostPerSqft: 85,
+    newConstructionPremium: 1.05,
+    zhviMin: 550000,
+    zhviMax: 900000,
+  },
+  D: {
+    tier: "D",
+    label: "Tier D · Ultra-high cost",
+    medianHomeSqft: 2500,
+    landSharePct: 40,
+    baseBuildCostPerSqft: 90,
+    newConstructionPremium: 1.03,
+    zhviMin: 900000,
+    zhviMax: Number.POSITIVE_INFINITY,
+  },
+};
+
+/**
+ * Classify a market into a tier from its median home price. Returns
+ * Tier B as a safe default when the price is null or the model
+ * cannot decide — B is the closest to the national median and the
+ * previous single-tier default.
+ */
+export function classifyMarketTier(
+  medianHomePrice: number | null
+): MarketTierDefaults {
+  if (medianHomePrice == null || !Number.isFinite(medianHomePrice)) {
+    return MARKET_TIERS.B;
+  }
+  if (medianHomePrice < MARKET_TIERS.A.zhviMax) return MARKET_TIERS.A;
+  if (medianHomePrice < MARKET_TIERS.B.zhviMax) return MARKET_TIERS.B;
+  if (medianHomePrice < MARKET_TIERS.C.zhviMax) return MARKET_TIERS.C;
+  return MARKET_TIERS.D;
+}
+
 export interface BusinessCaseInputs {
   /**
    * Percentage of the finished home sale price allocated to raw
@@ -85,8 +185,15 @@ export interface BusinessCaseInputs {
   sgaMultiplier: number;
 }
 
+/**
+ * Legacy static defaults — calibrated to Tier B. Kept for backward
+ * compatibility with any code paths that haven't been moved to the
+ * tier-aware `defaultInputsForTier()` helper below. New code should
+ * always go through `defaultInputsForTier()` so the CEO sees the
+ * right starting point for the market they're looking at.
+ */
 export const DEFAULT_INPUTS: BusinessCaseInputs = {
-  landSharePct: 25,
+  landSharePct: 22,
   buildCostMultiplier: 1.0,
   absorptionMultiplier: 1.0,
   targetUnitsPerYear: 500,
@@ -99,6 +206,21 @@ export const DEFAULT_INPUTS: BusinessCaseInputs = {
   optionFeePct: 5,
   sgaMultiplier: 1.0,
 };
+
+/**
+ * Tier-aware defaults. The land share flexes per tier; the rest of
+ * the inputs (build multiplier, absorption, mix, SG&A) are the same
+ * across tiers because those are CEO-level levers, not
+ * market-structure levers.
+ */
+export function defaultInputsForTier(
+  tier: MarketTierDefaults
+): BusinessCaseInputs {
+  return {
+    ...DEFAULT_INPUTS,
+    landSharePct: tier.landSharePct,
+  };
+}
 
 // ─── Organic Entry Model outputs ────────────────────────────────
 //
@@ -147,6 +269,13 @@ export interface OrganicBucketOutput {
 }
 
 export interface OrganicOutput {
+  /**
+   * Market tier classification driving the calibrated defaults
+   * (sqft, land share, build cost, sale premium). Exposed so the
+   * UI can show a "Tier A · Low cost" chip next to the market name.
+   */
+  tier: MarketTier;
+  tierLabel: string;
   /** Portfolio-weighted capital per unit across all three buckets. */
   blendedCapitalPerUnit: number | null;
   /** Weighted months to first closing. */
@@ -178,6 +307,12 @@ export interface OrganicOutput {
     baseBuildCost: number | null;
     carryingCostPerUnit: number | null;
     projectedSalePrice: number | null;
+    /** Median home sqft used for the build-cost calc (from tier). */
+    medianHomeSqft: number | null;
+    /** Base build cost $/sqft used for the calc (from tier). */
+    baseBuildCostPerSqft: number | null;
+    /** New-construction sale premium applied to the ZHVI median. */
+    newConstructionPremium: number | null;
   };
   /** Human-readable warnings the scorer wants surfaced to the CEO. */
   warnings: string[];

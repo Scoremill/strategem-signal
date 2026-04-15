@@ -18,7 +18,10 @@ import {
   computeAcquisitionEntry,
   recommendEntryPath,
 } from "@/lib/business-case/acquisition-entry-model";
-import { DEFAULT_INPUTS } from "@/lib/business-case/types";
+import {
+  classifyMarketTier,
+  defaultInputsForTier,
+} from "@/lib/business-case/types";
 import { saveBusinessCase } from "./actions";
 import BusinessCasePdfTemplate from "./BusinessCasePdfTemplate";
 import { exportElementToPdf } from "./exportPdf";
@@ -98,7 +101,16 @@ export default function BusinessCaseClient({
   marketHealth,
 }: Props) {
   const router = useRouter();
-  const [inputs, setInputs] = useState<BusinessCaseInputs>(DEFAULT_INPUTS);
+  // Seed from the market's tier, not a static default. The tier is
+  // derived from the Zillow ZHVI median price that the server
+  // already fetched into rawOrganic.
+  const marketTier = useMemo(
+    () => classifyMarketTier(rawOrganic.medianHomePrice.value),
+    [rawOrganic.medianHomePrice.value]
+  );
+  const [inputs, setInputs] = useState<BusinessCaseInputs>(() =>
+    defaultInputsForTier(marketTier)
+  );
   const [acquisitionMultiple, setAcquisitionMultiple] = useState<number>(2.5);
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
@@ -153,7 +165,7 @@ export default function BusinessCaseClient({
   }
 
   function resetToDefaults() {
-    setInputs(DEFAULT_INPUTS);
+    setInputs(defaultInputsForTier(marketTier));
     setAcquisitionMultiple(2.5);
   }
 
@@ -218,6 +230,10 @@ export default function BusinessCaseClient({
 
   return (
     <>
+      {/* Market tier chip — communicates which calibration the model
+          is using for this market, so nothing is black-box. */}
+      <TierChip tier={marketTier} />
+
       {/* Recommendation chip + save button */}
       <div className="mb-6 flex items-start gap-4">
         <div className="flex-1 min-w-0">
@@ -596,6 +612,35 @@ function MixSlider({
 
 // ─── Output cards (identical shapes to the server version) ────────
 
+function TierChip({
+  tier,
+}: {
+  tier: ReturnType<typeof classifyMarketTier>;
+}) {
+  const color =
+    tier.tier === "A"
+      ? "bg-[#ECFDF5] text-[#065F46] border-[#10B981]"
+      : tier.tier === "B"
+      ? "bg-[#FFF7ED] text-[#9A3412] border-[#F97316]"
+      : "bg-[#EFF6FF] text-[#1E3A5F] border-[#3B82F6]";
+  return (
+    <div className="mb-4 flex items-center gap-3 flex-wrap">
+      <span
+        className={`rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${color}`}
+      >
+        {tier.label}
+      </span>
+      <span className="text-[11px] text-[#6B7280] leading-tight">
+        Defaults: {tier.medianHomeSqft.toLocaleString()} sqft · $
+        {tier.baseBuildCostPerSqft}/sqft base · {tier.landSharePct}% land
+        share · +{Math.round((tier.newConstructionPremium - 1) * 100)}%
+        new-construction premium. Pull the sliders if your basis is
+        different.
+      </span>
+    </div>
+  );
+}
+
 function RecommendationBanner({
   recommendation,
   rationale,
@@ -661,7 +706,11 @@ function AssumptionsStrip({
         <AssumptionTile
           label="Projected sale price"
           value={fmtDollarsFull(a.projectedSalePrice)}
-          sub="+5% new-construction premium"
+          sub={
+            a.newConstructionPremium != null
+              ? `+${Math.round((a.newConstructionPremium - 1) * 100)}% new-construction premium`
+              : "New-construction premium"
+          }
         />
         <AssumptionTile
           label="Raw land per unit"
@@ -671,7 +720,11 @@ function AssumptionsStrip({
         <AssumptionTile
           label="Base build cost"
           value={fmtDollarsFull(a.baseBuildCost)}
-          sub="QCEW-derived, 2,500 sqft"
+          sub={
+            a.medianHomeSqft != null && a.baseBuildCostPerSqft != null
+              ? `$${a.baseBuildCostPerSqft}/sqft × ${a.medianHomeSqft.toLocaleString()} sqft (QCEW-adj)`
+              : "QCEW-derived"
+          }
         />
       </div>
     </div>
