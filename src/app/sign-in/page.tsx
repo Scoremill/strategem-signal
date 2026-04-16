@@ -25,7 +25,10 @@ export default function SignInPage() {
       const data = await res.json();
 
       if (res.ok) {
-        router.push("/dashboard");
+        // Root redirects to /heatmap (or /welcome for first-login
+        // users via the app-layout onboarding gate). Going through
+        // root keeps one source of truth for the landing page.
+        router.push("/");
         router.refresh();
       } else {
         setError(data.error || "Invalid credentials");
