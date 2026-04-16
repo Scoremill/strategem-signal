@@ -1,0 +1,29 @@
+name: Monthly Market Narratives
+
+on:
+  schedule:
+    # 23rd of each month at 7:00 AM CT (12:00 UTC)
+    # Fires the day after portfolio-health, market-opportunity, and
+    # fhfa crons have run so the narrative generator picks up the
+    # freshest snapshots.
+    - cron: '0 12 23 * *'
+  workflow_dispatch:
+
+jobs:
+  refresh-market-narratives:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Regenerate market narratives
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.APP_URL }}/api/cron/market-narratives" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Market narratives response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Market narratives failed with HTTP $HTTP_CODE"
+            exit 1
+          fi

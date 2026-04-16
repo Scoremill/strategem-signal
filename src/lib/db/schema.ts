@@ -1,5 +1,6 @@
 import {
   pgTable,
+  pgEnum,
   text,
   integer,
   bigint,
@@ -8,6 +9,7 @@ import {
   timestamp,
   doublePrecision,
   decimal,
+  json,
   index,
   primaryKey,
   uniqueIndex,
@@ -190,115 +192,472 @@ export const constructionSpending = pgTable(
 );
 
 // ─── Computed Scores ─────────────────────────────────────────────
+//
+// Removed in v2 Phase 0.7: demand_scores, capacity_scores, demand_capacity_scores.
+// The v1 composite Demand-Capacity Ratio was the wrong analytical model
+// (collapses six independent filters into one number; hides which filter
+// is failing). Phase 2 of v2 replaces it with per-filter scoring against
+// the six CEO requirement filters, each carrying its own 0-100 score
+// and a clickable source-traceability drill-down. The corresponding
+// database tables get DROPped in Phase 0.8.
 
-// Demand scores — blended demand index per MSA per period
-export const demandScores = pgTable(
-  "demand_scores",
-  {
-    id: text("id").primaryKey(),
-    geographyId: text("geography_id").notNull().references(() => geographies.id),
-    scoreDate: date("score_date").notNull(),
-    permitScore: decimal("permit_score", { precision: 5, scale: 2 }),
-    employmentScore: decimal("employment_score", { precision: 5, scale: 2 }),
-    migrationScore: decimal("migration_score", { precision: 5, scale: 2 }),
-    incomeScore: decimal("income_score", { precision: 5, scale: 2 }),
-    startsScore: decimal("starts_score", { precision: 5, scale: 2 }),
-    demandIndex: decimal("demand_index", { precision: 6, scale: 2 }).notNull(),
-    computedAt: timestamp("computed_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("idx_demand_geo_date").on(table.geographyId, table.scoreDate),
-  ]
-);
+// ─── Multi-Tenant Foundation (v2) ────────────────────────────────
+//
+// StrategemSignal v2 is a multi-tenant SaaS. The tables below hold the
+// tenant boundary: orgs, users, memberships, role enum, plus the
+// per-org configuration (tracked markets, watchlist, weighting, flags,
+// business cases, alert prefs, alerts, audit log).
+//
+// Every tenant-scoped table carries an `org_id` column. Phase 0.10
+// adds Postgres Row-Level Security policies on top of these tables to
+// enforce tenant isolation at the database engine level — a buggy
+// query cannot leak rows across tenants because the database refuses
+// to return them. The session-variable `app.current_org_id` is set
+// from the JWT on every request via Drizzle middleware.
+//
+// Foreign keys cascade DELETE so offboarding an org is one statement
+// against orgs and the rest of the tenant data evaporates cleanly.
 
-// Capacity scores — blended capacity index per MSA per period
-export const capacityScores = pgTable(
-  "capacity_scores",
-  {
-    id: text("id").primaryKey(),
-    geographyId: text("geography_id").notNull().references(() => geographies.id),
-    scoreDate: date("score_date").notNull(),
-    tradeEmploymentScore: decimal("trade_employment_score", { precision: 5, scale: 2 }),
-    wageAccelerationScore: decimal("wage_acceleration_score", { precision: 5, scale: 2 }),
-    establishmentScore: decimal("establishment_score", { precision: 5, scale: 2 }),
-    permitsPerWorkerScore: decimal("permits_per_worker_score", { precision: 5, scale: 2 }),
-    dollarsPerWorkerScore: decimal("dollars_per_worker_score", { precision: 5, scale: 2 }),
-    capacityIndex: decimal("capacity_index", { precision: 6, scale: 2 }).notNull(),
-    computedAt: timestamp("computed_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("idx_capacity_geo_date").on(table.geographyId, table.scoreDate),
-  ]
-);
+// Roles enum — used by org_memberships.role.
+//   owner             — full control, only owner can delete the org
+//   ceo               — read all, edit settings, see board-readiness views
+//   cfo               — read all, focus on capital + ROIC dashboards
+//   coo               — read all, focus on operational filters + cycle time
+//   division_president — read all, focus on a subset of markets
+//   member            — read-only generic access
+export const orgRole = pgEnum("org_role", [
+  "owner",
+  "ceo",
+  "cfo",
+  "coo",
+  "division_president",
+  "member",
+]);
 
-// Master demand-capacity scores — the core metric table
-export const demandCapacityScores = pgTable(
-  "demand_capacity_scores",
-  {
-    id: text("id").primaryKey(),
-    geographyId: text("geography_id").notNull().references(() => geographies.id),
-    scoreDate: date("score_date").notNull(),
-    demandIndex: decimal("demand_index", { precision: 6, scale: 2 }).notNull(),
-    capacityIndex: decimal("capacity_index", { precision: 6, scale: 2 }).notNull(),
-    demandCapacityRatio: decimal("demand_capacity_ratio", { precision: 8, scale: 3 }).notNull(),
-    // Status: "constrained" (>1.15), "equilibrium" (0.85-1.15), "favorable" (<0.85)
-    status: text("status").notNull(),
-    // Velocity — rate of change over time windows
-    velocity3mDemand: decimal("velocity_3m_demand", { precision: 6, scale: 2 }),
-    velocity6mDemand: decimal("velocity_6m_demand", { precision: 6, scale: 2 }),
-    velocity12mDemand: decimal("velocity_12m_demand", { precision: 6, scale: 2 }),
-    velocity3mCapacity: decimal("velocity_3m_capacity", { precision: 6, scale: 2 }),
-    velocity6mCapacity: decimal("velocity_6m_capacity", { precision: 6, scale: 2 }),
-    velocity12mCapacity: decimal("velocity_12m_capacity", { precision: 6, scale: 2 }),
-    velocity3mRatio: decimal("velocity_3m_ratio", { precision: 6, scale: 3 }),
-    velocity6mRatio: decimal("velocity_6m_ratio", { precision: 6, scale: 3 }),
-    velocity12mRatio: decimal("velocity_12m_ratio", { precision: 6, scale: 3 }),
-    // Trade Availability: workers per permit adjusted for wage pressure
-    tradeAvailability: decimal("trade_availability", { precision: 8, scale: 2 }),
-    // Estimated Monthly Starts: derived from permit volume × regional conversion factor
-    estMonthlyStarts: integer("est_monthly_starts"),
-    // Percentile rankings across all MSAs
-    demandPercentileRank: decimal("demand_percentile_rank", { precision: 5, scale: 2 }),
-    capacityPercentileRank: decimal("capacity_percentile_rank", { precision: 5, scale: 2 }),
-    ratioPercentileRank: decimal("ratio_percentile_rank", { precision: 5, scale: 2 }),
-    computedAt: timestamp("computed_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("idx_dc_geo_date").on(table.geographyId, table.scoreDate),
-    index("idx_dc_status").on(table.status),
-  ]
-);
-
-// ─── Users & Auth ────────────────────────────────────────────────
-
-export const users = pgTable("users", {
-  id: text("id").primaryKey(),
-  email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
-  name: text("name"),
-  role: text("role").default("user").notNull(), // "user" | "admin"
-  subscriptionStatus: text("subscription_status").default("active").notNull(),
+// Customer organizations — one row per homebuilder customer.
+export const orgs = pgTable("orgs", {
+  id: text("id").primaryKey(), // UUID
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(), // lowercased, used in URLs/JWT
+  // Stripe subscription fields populated by Phase 0.12
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  subscriptionStatus: text("subscription_status").default("trial").notNull(),
+  trialEndsAt: timestamp("trial_ends_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// ─── Cached Narratives ───────────────────────────────────────────
+// Users — identity is separate from org membership.
+// One user can belong to multiple orgs via org_memberships.
+export const users = pgTable("users", {
+  id: text("id").primaryKey(), // UUID
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  name: text("name"),
+  emailVerifiedAt: timestamp("email_verified_at"),
+  lastLoginAt: timestamp("last_login_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
 
-export const narratives = pgTable(
-  "narratives",
-  {
-    id: text("id").primaryKey(),
-    type: text("type").notNull(), // "market", "portfolio", "capacity"
-    geographyId: text("geography_id"), // null for portfolio-level
-    fullNarrative: text("full_narrative"), // long version
-    snippet: text("snippet"), // short version (for popups)
-    metadata: text("metadata"), // JSON — topPicks, watchList, implications, etc.
-    generatedAt: timestamp("generated_at").defaultNow().notNull(),
-  },
-  (table) => [
-    index("idx_narratives_type_geo").on(table.type, table.geographyId),
-  ]
-);
+// Org membership — joins users to orgs with a role.
+// The (user_id, org_id) pair is unique so a user has exactly one role per org.
+export const orgMemberships = pgTable("org_memberships", {
+  id: text("id").primaryKey(), // UUID
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  role: orgRole("role").notNull(),
+  invitedBy: text("invited_by").references(() => users.id),
+  invitedAt: timestamp("invited_at"),
+  joinedAt: timestamp("joined_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_org_memberships_user_org").on(table.userId, table.orgId),
+  index("idx_org_memberships_org").on(table.orgId),
+]);
+
+// Tracked markets — each user's PERSONAL filter of MSAs they care about.
+// Not a shared org-wide list. A CEO, a CFO, and a Division President working
+// in the same org each manage their own filter; the Portfolio Health View
+// scores only the markets in the current user's filter. org_id is retained
+// so the row cascades with the org and participates in the tenantQuery
+// isolation layer, but the uniqueness and ownership live at the user level.
+export const trackedMarkets = pgTable("tracked_markets", {
+  id: text("id").primaryKey(), // UUID
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  geographyId: text("geography_id").notNull().references(() => geographies.id),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_tracked_markets_user_geo").on(table.userId, table.geographyId),
+  index("idx_tracked_markets_user").on(table.userId),
+  index("idx_tracked_markets_org").on(table.orgId),
+]);
+
+// Watchlist markets — each user's PERSONAL flagged markets from the
+// Phase 2 /opportunities screen. Same per-user model as tracked_markets:
+// a CEO and a CFO in the same org each manage their own watchlist. org_id
+// is retained so the row cascades with the org, but uniqueness and
+// ownership live at the user level.
+export const watchlistMarkets = pgTable("watchlist_markets", {
+  id: text("id").primaryKey(), // UUID
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  geographyId: text("geography_id").notNull().references(() => geographies.id),
+  notes: text("notes"),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_watchlist_markets_user_geo").on(table.userId, table.geographyId),
+  index("idx_watchlist_markets_user").on(table.userId),
+  index("idx_watchlist_markets_org").on(table.orgId),
+]);
+
+// Health score weighting — per-USER tuning of the composite Portfolio Health
+// score. Each user in an org picks their own weighting profile (a CEO may
+// weight affordability heavily while a COO prioritizes operational feasibility
+// in the same market). The three weights must sum to 1.0, enforced in app
+// code. Phase 1.3 exposes four preset profiles rather than free sliders to
+// keep the UI simple; the column layout still supports arbitrary weights
+// in case we add a custom option later.
+export const healthScoreWeights = pgTable("health_score_weights", {
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  weightFinancial: decimal("weight_financial", { precision: 4, scale: 3 }).default("0.400").notNull(),
+  weightDemand: decimal("weight_demand", { precision: 4, scale: 3 }).default("0.300").notNull(),
+  weightOperational: decimal("weight_operational", { precision: 4, scale: 3 }).default("0.300").notNull(),
+  presetName: text("preset_name").default("balanced").notNull(), // "balanced" | "demand" | "affordability" | "operational"
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.orgId] }),
+]);
+
+// Flags — markets a user has flagged with a personal note for follow-up.
+// Org-scoped so other org members can see the same flags.
+export const flags = pgTable("flags", {
+  id: text("id").primaryKey(), // UUID
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  geographyId: text("geography_id").notNull().references(() => geographies.id),
+  flaggedBy: text("flagged_by").notNull().references(() => users.id),
+  note: text("note"),
+  status: text("status").default("open").notNull(), // "open" | "in_review" | "decided" | "dismissed"
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+}, (table) => [
+  index("idx_flags_org").on(table.orgId),
+  index("idx_flags_org_geo").on(table.orgId, table.geographyId),
+]);
+
+// Business cases — saved organic/acquisition entry models from Phase 3.
+// Each case is a JSON blob with the inputs, the computed outputs, and the
+// recommendation. Stored as JSON because the schema will evolve fast in
+// Phase 3 and we don't want a migration per shape change.
+/**
+ * Saved business cases from the Phase 3 Business Case Engine.
+ *
+ * Each row represents one CEO-led entry analysis for a specific
+ * market: inputs the user dialed in, outputs from BOTH the Organic
+ * Entry Model and the Acquisition Entry Model, plus an advisory
+ * recommendation chip. The engine always computes both paths so the
+ * CEO can compare side-by-side; they pick the direction, the chip
+ * is advisory only.
+ *
+ * Per-user scoped (same pattern as tracked_markets, weighting presets,
+ * watchlist_markets). Org_id is retained for cascade delete when an
+ * org is removed and for the future "share with teammates" feature.
+ */
+export const businessCases = pgTable("business_cases", {
+  id: text("id").primaryKey(), // UUID
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  geographyId: text("geography_id").notNull().references(() => geographies.id),
+  title: text("title").notNull(),
+  notes: text("notes"),
+  /**
+   * User-adjustable assumptions for both models — land share, land mix
+   * (pct finished/raw/optioned), build cost multiplier, absorption pace
+   * multiplier, acquisition multiple range, etc. Shape documented in
+   * src/lib/business-case/types.ts.
+   */
+  inputsJson: json("inputs_json"),
+  /** Output of the Organic Entry Model — capital, timeline, ROIC. */
+  organicOutputsJson: json("organic_outputs_json"),
+  /** Output of the Acquisition Entry Model — target list, multiples. */
+  acquisitionOutputsJson: json("acquisition_outputs_json"),
+  /** Advisory chip shown at the top of the case: go organic / go
+   *  acquisition / pass. Computed from the two outputs; never a
+   *  hard-coded value. Preserved as stored so the saved case can
+   *  be reopened without recomputing. */
+  recommendation: text("recommendation"), // "organic" | "acquisition" | "pass"
+  /** If true, other members of the org can view this case. Phase 3.7
+   *  wires the share flow; default is private. */
+  shared: boolean("shared").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_business_cases_user").on(table.userId),
+  index("idx_business_cases_geo").on(table.geographyId),
+  index("idx_business_cases_org").on(table.orgId),
+]);
+
+// Alert preferences — per-user delivery cadence for the alert system.
+// One row per (user, org) pair so a user can have different prefs per org.
+export const alertPreferences = pgTable("alert_preferences", {
+  id: text("id").primaryKey(), // UUID
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  cadence: text("cadence").default("weekly").notNull(), // "immediate" | "daily" | "weekly" | "off"
+  emailEnabled: boolean("email_enabled").default(true).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_alert_prefs_user_org").on(table.userId, table.orgId),
+]);
+
+// Alerts — actual alert events fired by the signal detection service in Phase 4.
+// Decision-framed: the decisionText is the headline ("→ land acquisition needed")
+// and the supporting data lives in payloadJson with full source traceability.
+export const alerts = pgTable("alerts", {
+  id: text("id").primaryKey(), // UUID
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  geographyId: text("geography_id").references(() => geographies.id),
+  alertType: text("alert_type").notNull(), // see Phase 4 alert types
+  severity: text("severity").default("info").notNull(), // "info" | "warning" | "critical"
+  decisionText: text("decision_text").notNull(),
+  payloadJson: json("payload_json"),
+  acknowledgedBy: text("acknowledged_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_alerts_org").on(table.orgId),
+  index("idx_alerts_org_created").on(table.orgId, table.createdAt),
+]);
+
+// Audit log — every settings change, every flag, every business case save
+// for board-defense compliance. CEO requirement section 5.2.
+export const auditLog = pgTable("audit_log", {
+  id: text("id").primaryKey(), // UUID
+  orgId: text("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  userId: text("user_id").references(() => users.id),
+  action: text("action").notNull(), // e.g. "tracked_market.added", "weights.updated"
+  entityType: text("entity_type"),
+  entityId: text("entity_id"),
+  beforeJson: json("before_json"),
+  afterJson: json("after_json"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_log_org_created").on(table.orgId, table.createdAt),
+]);
+
+// ─── StrategemOps Builder → Market Mapping ──────────────────────
+//
+// Derived table. NOT a mirror of a StrategemOps table — we build this
+// table ourselves by parsing the narrative text from
+// ops_management_narratives with an LLM, extracting per-builder
+// mentions of specific markets (cities, metros, submarkets), then
+// resolving each mention to a CBSA in our geographies table.
+//
+// Used by Phase 2 Filter 4 (Competitive Landscape) which scores each
+// market by counting how many public builders operate in it, and by
+// the Phase 3 Acquisition Entry Model.
+//
+// Schema:
+//   builder_ticker   Ticker from ops_companies
+//   geography_id     FK to geographies
+//   mention_count    Number of distinct narratives that mention this
+//                    builder→market pair (confidence signal)
+//   first_seen_year  Earliest fiscal year in which the pair appeared
+//   last_seen_year   Most recent fiscal year in which the pair appeared
+//   source_ids       JSON array of ops_management_narratives row ids
+//                    so a reviewer can jump to the source quote
+//   confidence       "high" (explicitly stated), "medium" (implied via
+//                    project or community name), "low" (inferred only)
+export const opsBuilderMarkets = pgTable("ops_builder_markets", {
+  id: text("id").primaryKey(), // UUID
+  builderTicker: text("builder_ticker").notNull(),
+  geographyId: text("geography_id").notNull().references(() => geographies.id, { onDelete: "cascade" }),
+  mentionCount: integer("mention_count").notNull().default(1),
+  firstSeenYear: integer("first_seen_year"),
+  lastSeenYear: integer("last_seen_year"),
+  sourceIds: json("source_ids"), // int[]
+  confidence: text("confidence").default("medium").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_ops_builder_markets_bt_geo").on(table.builderTicker, table.geographyId),
+  index("idx_ops_builder_markets_geo").on(table.geographyId),
+  index("idx_ops_builder_markets_ticker").on(table.builderTicker),
+]);
+
+// ─── Zillow Home Value Index (ZHVI) ─────────────────────────────
+//
+// Metro-level median home value in dollars, published monthly by
+// Zillow. Used by the Phase 3 Organic Entry Model to estimate land
+// basis per metro (finished home price × land-share-of-home ratio).
+//
+// Zillow publishes a single CSV keyed by their internal RegionID.
+// We match to our geographies by first-city + state on the
+// RegionName field since Zillow doesn't expose CBSA FIPS. A small
+// override table in the pipeline handles the ~5 metros where the
+// first-city match fails (Boise→Boise City, Dayton-Kettering→Dayton,
+// etc.). Puerto Rico metros are not covered by Zillow and are a
+// known gap consistent with FHFA.
+//
+// Unlike the FHFA HPI table which stores an index, this table stores
+// actual dollar prices. The Phase 3 model needs real dollars to
+// compute land cost per unit, so ZHVI is the right source.
+export const zillowZhvi = pgTable("zillow_zhvi", {
+  id: text("id").primaryKey(), // UUID
+  geographyId: text("geography_id").notNull().references(() => geographies.id, { onDelete: "cascade" }),
+  periodDate: date("period_date").notNull(), // month-end date from Zillow header
+  medianHomeValue: integer("median_home_value").notNull(), // dollars
+  source: text("source").default("zillow_zhvi_metro").notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_zillow_zhvi_geo_period").on(table.geographyId, table.periodDate),
+  index("idx_zillow_zhvi_geo").on(table.geographyId),
+]);
+
+// ─── FHFA House Price Index ──────────────────────────────────────
+//
+// Quarterly home price index from the Federal Housing Finance Agency.
+// One row per (geography, year, quarter). The HPI is a 1975-base
+// index — a value of 300 means prices have tripled since 1975 in that
+// metro. Used by:
+//   - Phase 2 Filter 5 (Affordability Runway) — HPI vs income growth
+//   - Phase 3 Organic Entry Model — directional land basis estimate
+//
+// Populated by the monthly FHFA cron and backfilled 2023Q1-2025Q4 via
+// scripts/backfill-fhfa.ts. FHFA publishes quarterly ~1 quarter after
+// quarter-end.
+export const fhfaHpi = pgTable("fhfa_hpi", {
+  id: text("id").primaryKey(), // UUID
+  geographyId: text("geography_id").notNull().references(() => geographies.id, { onDelete: "cascade" }),
+  year: integer("year").notNull(),
+  quarter: integer("quarter").notNull(), // 1-4
+  hpi: decimal("hpi", { precision: 8, scale: 2 }).notNull(),
+  hpiYoyChangePct: decimal("hpi_yoy_change_pct", { precision: 6, scale: 2 }),
+  source: text("source").default("fhfa_metro").notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_fhfa_hpi_geo_period").on(table.geographyId, table.year, table.quarter),
+  index("idx_fhfa_hpi_geo").on(table.geographyId),
+]);
+
+// ─── Portfolio Health Snapshots ──────────────────────────────────
+//
+// The output of the Phase 1.2 scoring service: one row per market per
+// snapshot run. Written by the monthly cron at /api/cron/portfolio-health
+// and read by the Portfolio Health View (heatmap + ranking table).
+//
+// Shared across all tenants: the snapshot isn't scoped to an org because
+// the score for a given market is identical regardless of who's looking
+// at it. Per-user weighting in 1.3 re-blends the three stored sub-scores
+// client-side — the server only computes and stores the raw sub-scores.
+//
+// Three sub-scores:
+//   - financial: affordability runway (ACS income vs wage growth)
+//   - demand: permits YoY + employment growth + net migration + unemployment
+//   - operational: QCEW construction wages + trade employment trajectory
+// All three are external-only in Phase 1; no internal StrategemOps data
+// feeds the composite (see CLAUDE.md "external-only" decision).
+//
+// inputsJson carries every raw input that fed the score with its source
+// and as-of date, so the drilldown "View Sources" modal in 1.6 can show
+// full traceability per the CEO requirement.
+export const portfolioHealthSnapshots = pgTable("portfolio_health_snapshots", {
+  id: text("id").primaryKey(), // UUID
+  geographyId: text("geography_id").notNull().references(() => geographies.id, { onDelete: "cascade" }),
+  snapshotDate: date("snapshot_date").notNull(), // date the cron ran
+  financialScore: decimal("financial_score", { precision: 5, scale: 2 }), // 0-100
+  demandScore: decimal("demand_score", { precision: 5, scale: 2 }), // 0-100
+  operationalScore: decimal("operational_score", { precision: 5, scale: 2 }), // 0-100
+  compositeScore: decimal("composite_score", { precision: 5, scale: 2 }), // 0-100 at default 40/30/30 weights
+  inputsJson: json("inputs_json"), // raw inputs + per-input source trace
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_portfolio_health_geo_date").on(table.geographyId, table.snapshotDate),
+  index("idx_portfolio_health_date").on(table.snapshotDate),
+]);
+
+// ─── Market Opportunity Scores (Phase 2 Six-Filter Scan) ────────
+//
+// One row per market per snapshot run. Written by the monthly cron at
+// /api/cron/market-opportunity, read by the /opportunities screen.
+// Shared across all tenants: the six-filter scores for a market are
+// identical regardless of who's looking at them.
+//
+// The six filters come from CEO requirement section 2.2:
+//   1. Migration Tailwinds        (Census PEP net domestic migration)
+//   2. Employment Diversity       (BLS QCEW sector HHI)
+//   3. Supply-Demand Imbalance    (permits YoY vs population growth)
+//   4. Competitive Landscape      (STUB — StrategemOps lacks builder→market)
+//   5. Affordability Runway       (STUB — FHFA HPI pipeline not built yet)
+//   6. Operational Feasibility    (BLS QCEW construction wages + trade
+//                                  employment trajectory, same math as
+//                                  Phase 1's Operational sub-score)
+//
+// num_green counts how many of the six filters scored >= 60 (the
+// heatmap's emerald-600 threshold). all_six_green is the headline
+// flag from the PLAN.md deliverable. Both are useful for sorting the
+// /opportunities table even while the two stubbed filters are null.
+//
+// inputsJson carries every raw input fed into each filter with its
+// source and as-of date, for the filter drilldown pages.
+export const marketOpportunityScores = pgTable("market_opportunity_scores", {
+  id: text("id").primaryKey(), // UUID
+  geographyId: text("geography_id").notNull().references(() => geographies.id, { onDelete: "cascade" }),
+  snapshotDate: date("snapshot_date").notNull(),
+  filter1Migration: decimal("filter_1_migration", { precision: 5, scale: 2 }),
+  filter2Diversity: decimal("filter_2_diversity", { precision: 5, scale: 2 }),
+  filter3Imbalance: decimal("filter_3_imbalance", { precision: 5, scale: 2 }),
+  filter4Competitive: decimal("filter_4_competitive", { precision: 5, scale: 2 }), // STUB
+  filter5Affordability: decimal("filter_5_affordability", { precision: 5, scale: 2 }), // STUB
+  filter6Operational: decimal("filter_6_operational", { precision: 5, scale: 2 }),
+  numGreen: integer("num_green").notNull().default(0),
+  allSixGreen: boolean("all_six_green").notNull().default(false),
+  inputsJson: json("inputs_json"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_market_opp_geo_date").on(table.geographyId, table.snapshotDate),
+  index("idx_market_opp_date").on(table.snapshotDate),
+  index("idx_market_opp_num_green").on(table.numGreen),
+]);
+
+// ─── Market Narratives ──────────────────────────────────────────
+//
+// Short LLM-generated blurbs that NARRATE the underlying data for a
+// market — two or three sentences apiece, neutral and factual. Two
+// blurbs per row: one for the Portfolio Health composite + sub-scores,
+// one for the six-filter Market Opportunity read.
+//
+// CEO-defensibility is the whole point. The prompt is strict: describe
+// the inputs, never recommend, never editorialize. "Dallas scores 72
+// composite, driven by strong affordability and steady demand; permits
+// are down 12% YoY which is dragging the operational sub-score."
+//
+// Refreshed by the same monthly cron that re-scores markets, so the
+// narratives stay in lockstep with the data they describe. Rendered
+// in the heatmap popup (Portfolio Health blurb only, for space) and
+// at the top of the /markets/[id] drilldown (both blurbs).
+export const marketNarratives = pgTable("market_narratives", {
+  id: text("id").primaryKey(), // UUID
+  geographyId: text("geography_id").notNull().references(() => geographies.id, { onDelete: "cascade" }),
+  snapshotDate: date("snapshot_date").notNull(),
+  portfolioHealthBlurb: text("portfolio_health_blurb"),
+  marketOpportunityBlurb: text("market_opportunity_blurb"),
+  model: text("model").default("gpt-4.1").notNull(),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_market_narratives_geo_date").on(table.geographyId, table.snapshotDate),
+  index("idx_market_narratives_geo").on(table.geographyId),
+]);
+
+// ─── Cached Narratives (legacy) ─────────────────────────────────
+//
+// Removed in v2 Phase 0.7. The v1 narratives table held LLM-generated
+// market and portfolio summaries that synthesized the composite scoring
+// without exposing the underlying reasoning chain. That contradicts the
+// CEO requirement that every insight be traceable to its source data.
+// Phase 4 of v2 rebuilds AI commentary with full source attribution per
+// claim. The corresponding database table gets DROPped in Phase 0.8.
 
 // ─── Pipeline Logs ───────────────────────────────────────────────
 
@@ -312,8 +671,294 @@ export const fetchLogs = pgTable("fetch_logs", {
   durationMs: integer("duration_ms"),
 });
 
+// ─── StrategemOps Mirror Tables (ops_*) ─────────────────────────
+//
+// These tables are LOCAL COPIES of StrategemOps data, refreshed by the
+// monthly snapshot job at /api/cron/ops-snapshot. The user-facing app code
+// only ever queries these mirror tables — never the StrategemOps DB directly.
+// This isolates the cross-database concern to one job and keeps app latency
+// independent of StrategemOps availability.
+//
+// Schema rules:
+//  - Same column names and shapes as the StrategemOps source tables
+//  - All Postgres ENUMs in StrategemOps become plain text here so we don't
+//    have to keep enum definitions in sync between the two databases
+//  - Every row carries snapshot_date so we can show data freshness in the UI
+//  - Primary key matches the source row's id (allows clean upsert by id)
+//  - StrategemOps source: project curly-mud-45701913, role strategem_signal_reader
+
+// Public homebuilder roster (StrategemOps companies)
+export const opsCompanies = pgTable("ops_companies", {
+  id: integer("id").primaryKey(),
+  ticker: text("ticker").notNull(),
+  companyName: text("company_name").notNull(),
+  cik: text("cik"),
+  exchange: text("exchange"),
+  builderCategory: text("builder_category"),
+  fiscalYearEnd: text("fiscal_year_end"),
+  headquarters: text("headquarters"),
+  irUrl: text("ir_url"),
+  activeStatus: boolean("active_status"),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// Builder 100 inclusion / coverage list
+export const opsCompanyUniverseRegistry = pgTable("ops_company_universe_registry", {
+  id: integer("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  builder100Year: integer("builder_100_year").notNull(),
+  builder100Rank: integer("builder_100_rank"),
+  publicStatus: boolean("public_status"),
+  inclusionStatus: text("inclusion_status"),
+  includedFromDate: date("included_from_date"),
+  archivedDate: date("archived_date"),
+  notes: text("notes"),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// Quarterly fiscal periods per company
+export const opsFinancialPeriods = pgTable("ops_financial_periods", {
+  id: integer("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  periodType: text("period_type"),
+  fiscalYear: integer("fiscal_year").notNull(),
+  fiscalQuarter: integer("fiscal_quarter"),
+  periodStart: date("period_start"),
+  periodEnd: date("period_end"),
+  filingDate: date("filing_date"),
+  accessionNumber: text("accession_number"),
+  sourcePriority: text("source_priority"),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+}, (table) => [
+  index("idx_ops_fp_company").on(table.companyId, table.fiscalYear, table.fiscalQuarter),
+]);
+
+// Quarterly financial line items (revenue, margin, cash flow, etc.)
+export const opsFinancialFacts = pgTable("ops_financial_facts", {
+  id: integer("id").primaryKey(),
+  financialPeriodId: integer("financial_period_id").notNull(),
+  revenue: decimal("revenue", { precision: 18, scale: 2 }),
+  grossProfit: decimal("gross_profit", { precision: 18, scale: 2 }),
+  grossMargin: decimal("gross_margin", { precision: 8, scale: 4 }),
+  operatingIncome: decimal("operating_income", { precision: 18, scale: 2 }),
+  operatingMargin: decimal("operating_margin", { precision: 8, scale: 4 }),
+  netIncome: decimal("net_income", { precision: 18, scale: 2 }),
+  epsBasic: decimal("eps_basic", { precision: 10, scale: 4 }),
+  epsDiluted: decimal("eps_diluted", { precision: 10, scale: 4 }),
+  totalAssets: decimal("total_assets", { precision: 18, scale: 2 }),
+  totalDebt: decimal("total_debt", { precision: 18, scale: 2 }),
+  totalEquity: decimal("total_equity", { precision: 18, scale: 2 }),
+  cashAndEquivalents: decimal("cash_and_equivalents", { precision: 18, scale: 2 }),
+  operatingCashFlow: decimal("operating_cash_flow", { precision: 18, scale: 2 }),
+  capex: decimal("capex", { precision: 18, scale: 2 }),
+  freeCashFlow: decimal("free_cash_flow", { precision: 18, scale: 2 }),
+  homebuildingRevenue: decimal("homebuilding_revenue", { precision: 18, scale: 2 }),
+  financialServicesIncome: decimal("financial_services_income", { precision: 18, scale: 2 }),
+  stockPriceAtReport: decimal("stock_price_at_report", { precision: 12, scale: 4 }),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// Quarterly operating KPIs (closings, ASP, lots, backlog, etc.)
+export const opsBuilderOperatingKpis = pgTable("ops_builder_operating_kpis", {
+  id: integer("id").primaryKey(),
+  financialPeriodId: integer("financial_period_id").notNull(),
+  homesOrdered: integer("homes_ordered"),
+  grossOrders: integer("gross_orders"),
+  homesClosed: integer("homes_closed"),
+  cancellationRate: decimal("cancellation_rate", { precision: 6, scale: 3 }),
+  backlogUnits: integer("backlog_units"),
+  backlogValue: decimal("backlog_value", { precision: 18, scale: 2 }),
+  activeCommunities: integer("active_communities"),
+  averageActiveCommunities: decimal("average_active_communities", { precision: 10, scale: 2 }),
+  averageSellingPrice: decimal("average_selling_price", { precision: 12, scale: 2 }),
+  backlogAsp: decimal("backlog_asp", { precision: 12, scale: 2 }),
+  deliveredAsp: decimal("delivered_asp", { precision: 12, scale: 2 }),
+  lotsOwned: integer("lots_owned"),
+  lotsControlled: integer("lots_controlled"),
+  lotsUnderContract: integer("lots_under_contract"),
+  mortgageCaptureRate: decimal("mortgage_capture_rate", { precision: 6, scale: 3 }),
+  completedSpecs: integer("completed_specs"),
+  specsUnderConstruction: integer("specs_under_construction"),
+  ordersPerCommunity: decimal("orders_per_community", { precision: 8, scale: 3 }),
+  closingsPerCommunity: decimal("closings_per_community", { precision: 8, scale: 3 }),
+  backlogTurnRatio: decimal("backlog_turn_ratio", { precision: 8, scale: 3 }),
+  ownedToControlledRatio: decimal("owned_to_controlled_ratio", { precision: 6, scale: 3 }),
+  completedSpecRiskRatio: decimal("completed_spec_risk_ratio", { precision: 6, scale: 3 }),
+  homesInInventory: integer("homes_in_inventory"),
+  sourceDocId: integer("source_doc_id"),
+  extractionMethod: text("extraction_method"),
+  confidenceScore: decimal("confidence_score", { precision: 4, scale: 2 }),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// Quarterly incentive % of revenue + buydown activity
+export const opsIncentiveTracking = pgTable("ops_incentive_tracking", {
+  id: integer("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  financialPeriodId: integer("financial_period_id"),
+  incentivesPctRevenue: decimal("incentives_pct_revenue", { precision: 6, scale: 3 }),
+  buydownOffered: boolean("buydown_offered"),
+  buydownRate: decimal("buydown_rate", { precision: 6, scale: 4 }),
+  source: text("source"),
+  notes: text("notes"),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// Earnings call prepared remarks + Q&A text
+export const opsManagementNarratives = pgTable("ops_management_narratives", {
+  id: integer("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  fiscalYear: integer("fiscal_year").notNull(),
+  fiscalQuarter: integer("fiscal_quarter"),
+  sourceDocumentId: integer("source_document_id"),
+  narrativeType: text("narrative_type"),
+  preparedRemarksText: text("prepared_remarks_text"),
+  qaText: text("qa_text"),
+  fullText: text("full_text"),
+  sourceMethod: text("source_method"),
+  confidenceScore: decimal("confidence_score", { precision: 4, scale: 2 }),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// Innovation / theme mentions per builder per period
+export const opsInnovationThemeMentions = pgTable("ops_innovation_theme_mentions", {
+  id: integer("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  fiscalYear: integer("fiscal_year").notNull(),
+  fiscalQuarter: integer("fiscal_quarter"),
+  themeName: text("theme_name").notNull(),
+  mentionCount: integer("mention_count"),
+  weightedScore: decimal("weighted_score", { precision: 8, scale: 4 }),
+  exampleSnippetsJson: json("example_snippets_json"),
+  sourceDocumentId: integer("source_document_id"),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// Per-builder per-quarter sentiment (raw + AI-scored)
+export const opsSentimentScores = pgTable("ops_sentiment_scores", {
+  id: integer("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  fiscalYear: integer("fiscal_year").notNull(),
+  fiscalQuarter: integer("fiscal_quarter"),
+  sourceDocumentId: integer("source_document_id"),
+  overallSentiment: decimal("overall_sentiment", { precision: 6, scale: 3 }),
+  confidenceSentiment: decimal("confidence_sentiment", { precision: 6, scale: 3 }),
+  riskToneScore: decimal("risk_tone_score", { precision: 6, scale: 3 }),
+  demandToneScore: decimal("demand_tone_score", { precision: 6, scale: 3 }),
+  marginToneScore: decimal("margin_tone_score", { precision: 6, scale: 3 }),
+  landToneScore: decimal("land_tone_score", { precision: 6, scale: 3 }),
+  laborToneScore: decimal("labor_tone_score", { precision: 6, scale: 3 }),
+  aiOverallScore: decimal("ai_overall_score", { precision: 6, scale: 3 }),
+  aiOverallLabel: text("ai_overall_label"),
+  aiDemandScore: decimal("ai_demand_score", { precision: 6, scale: 3 }),
+  aiDemandSummary: text("ai_demand_summary"),
+  aiMarginScore: decimal("ai_margin_score", { precision: 6, scale: 3 }),
+  aiMarginSummary: text("ai_margin_summary"),
+  aiLaborScore: decimal("ai_labor_score", { precision: 6, scale: 3 }),
+  aiLaborSummary: text("ai_labor_summary"),
+  aiLandScore: decimal("ai_land_score", { precision: 6, scale: 3 }),
+  aiLandSummary: text("ai_land_summary"),
+  aiConfidenceScore: decimal("ai_confidence_score", { precision: 6, scale: 3 }),
+  aiConfidenceSummary: text("ai_confidence_summary"),
+  aiRiskScore: decimal("ai_risk_score", { precision: 6, scale: 3 }),
+  aiRiskSummary: text("ai_risk_summary"),
+  aiTrendNarrative: text("ai_trend_narrative"),
+  aiScoredAt: timestamp("ai_scored_at"),
+  aiModelVersion: text("ai_model_version"),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// Sector-wide sentiment composite per period
+export const opsSectorSentimentComposite = pgTable("ops_sector_sentiment_composite", {
+  id: integer("id").primaryKey(),
+  fiscalYear: integer("fiscal_year").notNull(),
+  fiscalQuarter: integer("fiscal_quarter").notNull(),
+  domain: text("domain").notNull(),
+  meanScore: decimal("mean_score", { precision: 6, scale: 3 }),
+  builderCount: integer("builder_count"),
+  computedAt: timestamp("computed_at"),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// Earnings calendar (next earnings dates per builder)
+export const opsEarningsCalendar = pgTable("ops_earnings_calendar", {
+  id: integer("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  expectedDate: date("expected_date"),
+  fiscalYear: integer("fiscal_year").notNull(),
+  fiscalQuarter: integer("fiscal_quarter").notNull(),
+  status: text("status"),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// Comparative ranges per metric (low/mid/high bands)
+export const opsBenchmarkRanges = pgTable("ops_benchmark_ranges", {
+  id: integer("id").primaryKey(),
+  metricKey: text("metric_key").notNull(),
+  metricLabel: text("metric_label").notNull(),
+  category: text("category").notNull(),
+  lowMin: decimal("low_min", { precision: 18, scale: 4 }),
+  lowMax: decimal("low_max", { precision: 18, scale: 4 }),
+  midMin: decimal("mid_min", { precision: 18, scale: 4 }),
+  midMax: decimal("mid_max", { precision: 18, scale: 4 }),
+  highMin: decimal("high_min", { precision: 18, scale: 4 }),
+  highMax: decimal("high_max", { precision: 18, scale: 4 }),
+  unit: text("unit"),
+  notes: text("notes"),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// Source documents (10-K, 10-Q, earnings call transcripts) — minus heavy text fields
+// We mirror metadata + URLs only; raw filing text stays in StrategemOps to keep
+// our snapshot fast and our DB small.
+export const opsSourceDocuments = pgTable("ops_source_documents", {
+  id: integer("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  documentType: text("document_type").notNull(),
+  sourceType: text("source_type").notNull(),
+  docDate: date("doc_date"),
+  title: text("title"),
+  sourceUrl: text("source_url"),
+  storagePath: text("storage_path"),
+  metadataJson: json("metadata_json"),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// SEC filings (10-K, 10-Q, 8-K) — metadata + MD&A + risk factors only.
+// filing_text and exhibits_index_json stay in StrategemOps.
+export const opsFilings = pgTable("ops_filings", {
+  id: integer("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  filingType: text("filing_type").notNull(),
+  filingDate: date("filing_date").notNull(),
+  accessionNumber: text("accession_number").notNull(),
+  filingUrl: text("filing_url"),
+  mdnaText: text("mdna_text"),
+  riskFactorsText: text("risk_factors_text"),
+  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
+});
+
+// Snapshot run log — written by /api/cron/ops-snapshot on every run.
+// Powers the daily self-heal retry workflow and the freshness indicator
+// in the UI ("Benchmark data as of [snapshot_date]").
+export const opsSnapshotLog = pgTable("ops_snapshot_log", {
+  id: text("id").primaryKey(), // UUID
+  runStartedAt: timestamp("run_started_at").defaultNow().notNull(),
+  runFinishedAt: timestamp("run_finished_at"),
+  // 'success' = all tables landed; 'partial' = some failed; 'failed' = none landed
+  status: text("status").notNull(),
+  // JSON blob with per-table { rows_fetched, rows_upserted, error } records
+  tablesJson: json("tables_json"),
+  totalRowsUpserted: integer("total_rows_upserted").default(0),
+  durationMs: integer("duration_ms"),
+  errors: text("errors"),
+}, (table) => [
+  index("idx_ops_snapshot_log_started").on(table.runStartedAt),
+]);
+
 // ─── Type Exports ────────────────────────────────────────────────
 
+// v1 surviving (federal data + ops mirror)
 export type Geography = typeof geographies.$inferSelect;
 export type PermitData = typeof permitData.$inferSelect;
 export type EmploymentData = typeof employmentData.$inferSelect;
@@ -321,6 +966,18 @@ export type MigrationData = typeof migrationData.$inferSelect;
 export type IncomeData = typeof incomeData.$inferSelect;
 export type TradeCapacityData = typeof tradeCapacityData.$inferSelect;
 export type OccupationData = typeof occupationData.$inferSelect;
-export type DemandCapacityScore = typeof demandCapacityScores.$inferSelect;
-export type User = typeof users.$inferSelect;
 export type FetchLog = typeof fetchLogs.$inferSelect;
+
+// v2 multi-tenant foundation
+export type Org = typeof orgs.$inferSelect;
+export type User = typeof users.$inferSelect;
+export type OrgMembership = typeof orgMemberships.$inferSelect;
+export type TrackedMarket = typeof trackedMarkets.$inferSelect;
+export type WatchlistMarket = typeof watchlistMarkets.$inferSelect;
+export type HealthScoreWeights = typeof healthScoreWeights.$inferSelect;
+export type Flag = typeof flags.$inferSelect;
+export type BusinessCase = typeof businessCases.$inferSelect;
+export type AlertPreference = typeof alertPreferences.$inferSelect;
+export type Alert = typeof alerts.$inferSelect;
+export type AuditLog = typeof auditLog.$inferSelect;
+export type OrgRole = (typeof orgRole.enumValues)[number];

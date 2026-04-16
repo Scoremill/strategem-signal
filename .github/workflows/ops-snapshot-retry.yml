@@ -1,0 +1,46 @@
+name: Daily StrategemOps Snapshot Self-Heal
+
+# Runs every day at 12:00 UTC (7:00 AM CT) — one hour after the monthly
+# primary snapshot fires. Hits the status endpoint first; only triggers a
+# real snapshot if the most recent one was failed or is older than 35 days.
+# On healthy days this workflow exits silently with zero StrategemOps queries
+# and no email alerts. On failure days it retries the snapshot transparently.
+#
+# This is the self-healing layer: a transient network blip on May 1 gets
+# caught by the May 2 retry without any human in the loop.
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+jobs:
+  self-heal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check snapshot freshness
+        id: status
+        run: |
+          STATUS=$(curl -s "${{ secrets.APP_URL }}/api/ops-snapshot-status")
+          echo "Status: $STATUS"
+          NEEDS=$(echo "$STATUS" | python3 -c "import json,sys; d=json.load(sys.stdin); print('true' if d.get('needsRetry') else 'false')")
+          echo "needsRetry=$NEEDS" >> "$GITHUB_OUTPUT"
+
+      - name: Retry snapshot if stale or failed
+        if: steps.status.outputs.needsRetry == 'true'
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.APP_URL }}/api/cron/ops-snapshot" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Retry response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Snapshot retry failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Skip (snapshot is healthy)
+        if: steps.status.outputs.needsRetry == 'false'
+        run: echo "Snapshot is healthy. No retry needed."

@@ -24,3 +24,49 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* iPad / touch polish — Phase 4.7 */
+
+/* Suppress the gray flash iOS Safari paints on tap. Applied on
+   specific buttons/links via the .tap-transparent utility so we
+   only disable the flash where we've intentionally designed a
+   hover/pressed state. */
+.tap-transparent {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Slider thumbs are the one touch control we can't make bigger with
+   Tailwind alone — WebKit ignores width/height on range inputs. Bump
+   the thumb + track height so dragging feels right on iPad. */
+input[type="range"] {
+  touch-action: manipulation;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 18px;
+  width: 18px;
+  border-radius: 9999px;
+  background: #F97316;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+input[type="range"]::-moz-range-thumb {
+  height: 18px;
+  width: 18px;
+  border-radius: 9999px;
+  background: #F97316;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Suppress the browser's default focus outline on buttons that
+   already have a visible hover/active state, but keep it for
+   keyboard users. */
+@media (hover: none) {
+  button:focus,
+  button:focus-visible {
+    outline: none;
+  }
+}

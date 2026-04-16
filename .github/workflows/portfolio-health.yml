@@ -1,0 +1,28 @@
+name: Monthly Portfolio Health Scoring
+
+on:
+  schedule:
+    # 22nd of each month at 6:00 AM CT (11:00 UTC)
+    # BLS LAUS (unemployment) publishes ~3rd week of the month; this gives
+    # a few days of buffer so every external input is fresh when we score.
+    - cron: '0 11 22 * *'
+  workflow_dispatch: # Manual trigger for ad-hoc runs
+
+jobs:
+  score-portfolio-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Recompute portfolio health scores
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.APP_URL }}/api/cron/portfolio-health" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Portfolio health response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Portfolio health scoring failed with HTTP $HTTP_CODE"
+            exit 1
+          fi

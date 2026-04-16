@@ -1,0 +1,29 @@
+name: Monthly Zillow ZHVI
+
+on:
+  schedule:
+    # 17th of each month at 8:00 AM CT (13:00 UTC)
+    # Zillow publishes on the 15th; we give 48 hours for any late
+    # revisions. The cron fires after the 16th FHFA / 22nd scoring
+    # window so it doesn't overlap.
+    - cron: '0 13 17 * *'
+  workflow_dispatch:
+
+jobs:
+  refresh-zillow-zhvi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Refresh Zillow ZHVI
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.APP_URL }}/api/cron/zillow-zhvi" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Zillow ZHVI response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Zillow ZHVI failed with HTTP $HTTP_CODE"
+            exit 1
+          fi

@@ -1,0 +1,28 @@
+name: Monthly Market Opportunity Scoring
+
+on:
+  schedule:
+    # 22nd of each month at 6:15 AM CT (11:15 UTC)
+    # Same window as portfolio-health (fires 15 min earlier at 11:00 UTC)
+    # so the two snapshot jobs don't overlap.
+    - cron: '15 11 22 * *'
+  workflow_dispatch:
+
+jobs:
+  score-market-opportunity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Recompute market opportunity scores
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.APP_URL }}/api/cron/market-opportunity" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Market opportunity response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Market opportunity scoring failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
