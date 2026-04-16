@@ -25,6 +25,8 @@ import { and, eq, desc } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { resolvePreset, type WeightPreset } from "@/lib/scoring/weight-presets";
+import SourceButton from "@/components/sources/SourceButton";
+import { tracesFromPortfolioHealth } from "@/lib/sources/traces";
 
 export const dynamic = "force-dynamic";
 
@@ -241,6 +243,22 @@ export default async function MarketDrilldownPage({ params }: PageProps) {
   };
   for (const d of INPUT_DISPLAY) byGroup[d.group].push(d);
 
+  // Pre-build the trace arrays the SourceButton needs. Built once
+  // server-side so every button hydrates with its slice already
+  // shaped. Sub-score buttons filter to only the inputs that fed
+  // that sub-score; composite button shows all inputs.
+  const allTraces = tracesFromPortfolioHealth(inputs);
+  const financialTraces = allTraces.filter((t) =>
+    byGroup.Financial.some((d) => d.label === t.label),
+  );
+  const demandTraces = allTraces.filter((t) =>
+    byGroup.Demand.some((d) => d.label === t.label),
+  );
+  const operationalTraces = allTraces.filter((t) =>
+    byGroup.Operational.some((d) => d.label === t.label),
+  );
+  const marketLabel = `${market.shortName}, ${market.state}`;
+
   return (
     <div className="p-4 sm:p-8 max-w-5xl">
       {/* Breadcrumb / back link */}
@@ -321,10 +339,18 @@ export default async function MarketDrilldownPage({ params }: PageProps) {
               >
                 {composite != null ? composite.toFixed(0) : "—"}
               </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
-                  Composite
-                </p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                    Composite
+                  </p>
+                  <SourceButton
+                    title={`Composite — ${marketLabel}`}
+                    subtitle={`${preset.label}. Blended from all three sub-score inputs at ${(preset.weights.financial * 100).toFixed(0)}/${(preset.weights.demand * 100).toFixed(0)}/${(preset.weights.operational * 100).toFixed(0)} weighting.`}
+                    traces={allTraces}
+                    ariaLabel="View sources for composite score"
+                  />
+                </div>
                 <p className="text-[11px] text-[#4B5563] mt-0.5">{preset.label}</p>
                 <p className="text-[10px] text-[#9CA3AF] mt-0.5">
                   {(preset.weights.financial * 100).toFixed(0)}/
@@ -336,9 +362,17 @@ export default async function MarketDrilldownPage({ params }: PageProps) {
 
             {/* Financial sub-score */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-2">
-                Financial
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                  Financial
+                </p>
+                <SourceButton
+                  title={`Financial sub-score — ${marketLabel}`}
+                  subtitle="Inputs that fed the Financial sub-score."
+                  traces={financialTraces}
+                  ariaLabel="View sources for Financial sub-score"
+                />
+              </div>
               <p className="text-3xl font-bold text-[#1E293B] tabular-nums">
                 {financial != null ? financial.toFixed(0) : "—"}
               </p>
@@ -347,9 +381,17 @@ export default async function MarketDrilldownPage({ params }: PageProps) {
 
             {/* Demand sub-score */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-2">
-                Demand
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                  Demand
+                </p>
+                <SourceButton
+                  title={`Demand sub-score — ${marketLabel}`}
+                  subtitle="Inputs that fed the Demand sub-score."
+                  traces={demandTraces}
+                  ariaLabel="View sources for Demand sub-score"
+                />
+              </div>
               <p className="text-3xl font-bold text-[#1E293B] tabular-nums">
                 {demand != null ? demand.toFixed(0) : "—"}
               </p>
@@ -358,9 +400,17 @@ export default async function MarketDrilldownPage({ params }: PageProps) {
 
             {/* Operational sub-score */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-2">
-                Operational
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                  Operational
+                </p>
+                <SourceButton
+                  title={`Operational sub-score — ${marketLabel}`}
+                  subtitle="Inputs that fed the Operational sub-score."
+                  traces={operationalTraces}
+                  ariaLabel="View sources for Operational sub-score"
+                />
+              </div>
               <p className="text-3xl font-bold text-[#1E293B] tabular-nums">
                 {operational != null ? operational.toFixed(0) : "—"}
               </p>

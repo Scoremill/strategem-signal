@@ -26,6 +26,8 @@ import {
 import { saveBusinessCase } from "./actions";
 import BusinessCasePdfTemplate from "./BusinessCasePdfTemplate";
 import { exportElementToPdf } from "./exportPdf";
+import SourceButton from "@/components/sources/SourceButton";
+import { tracesFromBusinessCaseAssumptions } from "@/lib/sources/traces";
 import type {
   AcquisitionOutput,
   AcquisitionTarget,
@@ -776,11 +778,24 @@ function AssumptionsStrip({
   inputs: BusinessCaseInputs;
 }) {
   const a = organic.assumptions;
+  const assumptionTraces = tracesFromBusinessCaseAssumptions(
+    a,
+    inputs.landCostSharePct,
+    organic.tierLabel,
+  );
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-3">
-        Market assumptions
-      </p>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+          Market assumptions
+        </p>
+        <SourceButton
+          title="Market assumptions"
+          subtitle="Where each market-level assumption comes from and how it was derived."
+          traces={assumptionTraces}
+          ariaLabel="View sources for market assumptions"
+        />
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <AssumptionTile
           label="Median home price"
