@@ -290,7 +290,75 @@ export default function BusinessCasePdfTemplate({
         />
       </div>
 
-      {/* Side-by-side models */}
+      {/* Organic Entry — full-width headline card */}
+      <div
+        style={{
+          border: `1px solid ${C.line}`,
+          borderRadius: 8,
+          padding: 14,
+          marginBottom: 14,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            marginBottom: 2,
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 800, color: C.body }}>
+            Organic Entry
+          </div>
+          <div
+            style={{
+              fontSize: 8,
+              textTransform: "uppercase",
+              letterSpacing: 0.8,
+              color: C.orange,
+              fontWeight: 700,
+            }}
+          >
+            Blended portfolio
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: C.muted, marginBottom: 10 }}>
+          Build from scratch using a three-bucket land mix.
+        </div>
+        <StatLine
+          label="Capital per unit"
+          value={fmtDollarsFull(organic.blendedCapitalPerUnit)}
+          emphasis
+        />
+        <StatLine
+          label="Months to first closing"
+          value={fmtMonths(organic.blendedMonthsToFirstClosing)}
+        />
+        <StatLine
+          label="Gross margin (reported-equiv)"
+          value={fmtPct(organic.blendedGrossMarginPct)}
+        />
+        <StatLine
+          label="Capital turns / yr"
+          value={fmtTurns(organic.blendedCapitalTurnsPerYear)}
+        />
+        <StatLine
+          label="Cycle contribution (pre-SG&A)"
+          value={fmtPct(organic.blendedCycleContributionPct)}
+        />
+        <StatLine
+          label="Estimated ROIC (post-SG&A)"
+          value={fmtPct(organic.blendedEstimatedRoicPct)}
+          emphasis
+        />
+        <StatLine
+          label="Year-one capital deployed"
+          value={fmtMoney(organic.yearOneCapitalDeployed)}
+          last
+        />
+      </div>
+
+      {/* Competitive Landscape + Acquisition Targets side-by-side */}
       <div
         style={{
           display: "grid",
@@ -299,7 +367,7 @@ export default function BusinessCasePdfTemplate({
           marginBottom: 16,
         }}
       >
-        {/* Organic */}
+        {/* Competitive Landscape */}
         <div
           style={{
             border: `1px solid ${C.line}`,
@@ -315,75 +383,8 @@ export default function BusinessCasePdfTemplate({
               marginBottom: 2,
             }}
           >
-            <div style={{ fontSize: 14, fontWeight: 800, color: C.body }}>
-              Organic Entry
-            </div>
-            <div
-              style={{
-                fontSize: 8,
-                textTransform: "uppercase",
-                letterSpacing: 0.8,
-                color: C.orange,
-                fontWeight: 700,
-              }}
-            >
-              Blended portfolio
-            </div>
-          </div>
-          <div style={{ fontSize: 10, color: C.muted, marginBottom: 10 }}>
-            Build from scratch using a three-bucket land mix.
-          </div>
-          <StatLine
-            label="Capital per unit"
-            value={fmtDollarsFull(organic.blendedCapitalPerUnit)}
-            emphasis
-          />
-          <StatLine
-            label="Months to first closing"
-            value={fmtMonths(organic.blendedMonthsToFirstClosing)}
-          />
-          <StatLine
-            label="Gross margin (reported-equiv)"
-            value={fmtPct(organic.blendedGrossMarginPct)}
-          />
-          <StatLine
-            label="Capital turns / yr"
-            value={fmtTurns(organic.blendedCapitalTurnsPerYear)}
-          />
-          <StatLine
-            label="Cycle contribution (pre-SG&A)"
-            value={fmtPct(organic.blendedCycleContributionPct)}
-          />
-          <StatLine
-            label="Estimated ROIC (post-SG&A)"
-            value={fmtPct(organic.blendedEstimatedRoicPct)}
-            emphasis
-          />
-          <StatLine
-            label="Year-one capital deployed"
-            value={fmtMoney(organic.yearOneCapitalDeployed)}
-            last
-          />
-        </div>
-
-        {/* Acquisition */}
-        <div
-          style={{
-            border: `1px solid ${C.line}`,
-            borderRadius: 8,
-            padding: 14,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-              marginBottom: 2,
-            }}
-          >
-            <div style={{ fontSize: 14, fontWeight: 800, color: C.body }}>
-              Acquisition Entry
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.body }}>
+              Competitive Landscape
             </div>
             <div
               style={{
@@ -394,69 +395,181 @@ export default function BusinessCasePdfTemplate({
                 fontWeight: 700,
               }}
             >
-              Comparator
+              Who&apos;s here
             </div>
           </div>
-          <div style={{ fontSize: 10, color: C.muted, marginBottom: 10 }}>
-            Buy a running start — directional, not a deal quote.
+          <div style={{ fontSize: 9, color: C.muted, marginBottom: 8 }}>
+            Public builders operating in this market — your likely
+            competitors if you enter organically.
           </div>
-          <StatLine
-            label="Estimated cost per unit"
-            value={fmtDollarsFull(acquisition.estimatedCostPerUnit)}
-            emphasis
-          />
-          <StatLine
-            label="Assumed multiple"
-            value={`${acquisition.assumedMultiple.toFixed(1)}× organic`}
-          />
-          <StatLine
-            label="Credible targets"
-            value={`${acquisition.targets.length} public builder${
-              acquisition.targets.length === 1 ? "" : "s"
-            }`}
-            last={acquisition.targets.length === 0}
-          />
-          {acquisition.targets.length > 0 && (
-            <div style={{ marginTop: 10 }}>
-              <div
-                style={{
-                  fontSize: 8,
-                  textTransform: "uppercase",
-                  letterSpacing: 0.8,
-                  color: C.muted,
-                  fontWeight: 600,
-                  marginBottom: 4,
-                }}
-              >
-                Who&apos;s here
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                {acquisition.targets.slice(0, 5).map((t) => (
-                  <div
-                    key={t.ticker}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: 9,
-                    }}
-                  >
-                    <span>
-                      <strong style={{ color: C.body }}>{t.ticker}</strong>
-                      {t.companyName && (
-                        <span style={{ color: C.muted }}> · {t.companyName}</span>
-                      )}
-                    </span>
-                    <span style={{ color: C.muted }}>
-                      {t.confidence} · {t.mentionCount}×
-                    </span>
-                  </div>
-                ))}
-                {acquisition.targets.length > 5 && (
-                  <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>
-                    +{acquisition.targets.length - 5} more
-                  </div>
-                )}
-              </div>
+
+          {acquisition.targets.length === 0 ? (
+            <div
+              style={{
+                fontSize: 9,
+                color: C.muted,
+                padding: "8px 4px",
+                fontStyle: "italic",
+              }}
+            >
+              No public builders cited this market.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              {acquisition.targets.slice(0, 6).map((t) => (
+                <div
+                  key={t.ticker}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                    fontSize: 9,
+                    paddingBottom: 2,
+                    borderBottom: `1px solid ${C.line}`,
+                  }}
+                >
+                  <span>
+                    <strong style={{ color: C.body, fontSize: 10 }}>
+                      {t.ticker}
+                    </strong>
+                    {t.companyName && (
+                      <span style={{ color: C.muted }}>
+                        {" · "}
+                        {t.companyName}
+                      </span>
+                    )}
+                  </span>
+                  <span style={{ color: C.muted, whiteSpace: "nowrap" }}>
+                    {t.confidence} · {t.mentionCount}×
+                  </span>
+                </div>
+              ))}
+              {acquisition.targets.length > 6 && (
+                <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>
+                  +{acquisition.targets.length - 6} more
+                </div>
+              )}
+            </div>
+          )}
+
+          <div
+            style={{
+              marginTop: 10,
+              paddingTop: 6,
+              borderTop: `1px solid ${C.line}`,
+              fontSize: 8,
+              color: C.muted,
+              lineHeight: 1.35,
+            }}
+          >
+            <strong style={{ color: C.body }}>Coverage:</strong>{" "}
+            Public-builder presence from earnings narratives. Private-
+            builder and regional-operator presence (NAHB Builder 100,
+            local builders) pending Phase 4 data pipeline.
+          </div>
+        </div>
+
+        {/* Acquisition Targets */}
+        <div
+          style={{
+            border: `1px solid ${C.line}`,
+            borderRadius: 8,
+            padding: 14,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginBottom: 2,
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.body }}>
+              Acquisition Targets
+            </div>
+            <div
+              style={{
+                fontSize: 8,
+                textTransform: "uppercase",
+                letterSpacing: 0.8,
+                color: C.muted,
+                fontWeight: 700,
+              }}
+            >
+              CEO call
+            </div>
+          </div>
+          <div style={{ fontSize: 9, color: C.muted, marginBottom: 8 }}>
+            Same incumbents — framed as potential targets. You decide
+            suitability; the tool does not.
+          </div>
+
+          <div
+            style={{
+              marginBottom: 8,
+              padding: "6px 8px",
+              borderRadius: 4,
+              background: C.orangeTint,
+              border: `1px solid ${C.orange}`,
+              fontSize: 8,
+              color: C.orangeText,
+              lineHeight: 1.4,
+            }}
+          >
+            <strong style={{ color: C.orangeText }}>How to read:</strong>{" "}
+            Typical M&A range is 2.0–3.0× book value (1.5× distressed,
+            3–4× premium). Larger builders rarely get acquired by
+            smaller ones — use your own scale to filter the list below.
+          </div>
+
+          {acquisition.targets.length === 0 ? (
+            <div
+              style={{
+                fontSize: 9,
+                color: C.muted,
+                padding: "8px 4px",
+                fontStyle: "italic",
+              }}
+            >
+              No public builders cited this market. Acquisition is
+              unlikely to be a realistic entry path here.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {acquisition.targets.slice(0, 6).map((t) => (
+                <div
+                  key={t.ticker}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                    fontSize: 9,
+                  }}
+                >
+                  <span>
+                    <strong style={{ color: C.body }}>{t.ticker}</strong>
+                    {t.companyName && (
+                      <span style={{ color: C.muted }}>
+                        {" · "}
+                        {t.companyName}
+                      </span>
+                    )}
+                  </span>
+                  <span style={{ color: C.muted, whiteSpace: "nowrap" }}>
+                    {t.firstSeenYear && t.lastSeenYear
+                      ? t.firstSeenYear === t.lastSeenYear
+                        ? t.lastSeenYear
+                        : `${t.firstSeenYear}–${t.lastSeenYear}`
+                      : ""}
+                  </span>
+                </div>
+              ))}
+              {acquisition.targets.length > 6 && (
+                <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>
+                  +{acquisition.targets.length - 6} more
+                </div>
+              )}
             </div>
           )}
         </div>

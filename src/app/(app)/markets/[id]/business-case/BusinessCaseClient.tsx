@@ -337,12 +337,15 @@ export default function BusinessCaseClient({
           onReset={resetToDefaults}
         />
 
-        {/* Right column — stacked output cards */}
+        {/* Right column — stacked output cards. Organic is the headline
+            and takes the top row; Competitive Landscape (who's here)
+            and Acquisition Targets sit side-by-side underneath. */}
         <div className="space-y-6 min-w-0">
           <AssumptionsStrip organic={organic} inputs={inputs} />
+          <OrganicCard organic={organic} />
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <OrganicCard organic={organic} />
-            <AcquisitionCard acquisition={acquisition} />
+            <CompetitiveLandscapeCard acquisition={acquisition} />
+            <AcquisitionTargetsCard acquisition={acquisition} />
           </div>
           <BucketBreakdown organic={organic} />
           <WarningsPanel organic={organic} acquisition={acquisition} />
@@ -880,78 +883,182 @@ function OrganicCard({ organic }: { organic: OrganicOutput }) {
   );
 }
 
-function AcquisitionCard({
+/**
+ * Competitive Landscape — who's in this market today.
+ * Reframes the prior "Acquisition Targets" list into a plain
+ * competitive-intelligence view. Every builder in the list is a
+ * competitor, not an acquisition target. No auto-applied multiples,
+ * no goodwill math. Public builders only for v1 — the private-
+ * builder feed (NAHB Builder 100, regional operators) is a Phase 4
+ * data-pipeline build.
+ */
+function CompetitiveLandscapeCard({
   acquisition,
 }: {
   acquisition: AcquisitionOutput;
 }) {
+  const targets = acquisition.targets;
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6">
+    <div className="rounded-xl border border-gray-200 bg-white p-6 flex flex-col">
       <div className="flex items-baseline justify-between mb-1">
-        <h2 className="text-lg font-bold text-[#1E293B]">Acquisition Entry</h2>
+        <h2 className="text-lg font-bold text-[#1E293B]">
+          Competitive Landscape
+        </h2>
         <span className="text-[10px] uppercase tracking-wide text-[#3B82F6] font-semibold">
-          Comparator
+          Who&apos;s here
         </span>
       </div>
       <p className="text-xs text-[#6B7280] mb-4">
-        Buy a running start — directional only, not a deal quote.
+        The public builders already operating in this market today —
+        your likely competitors if you enter organically.
       </p>
-      <div className="mb-4 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] p-3">
-        <p className="text-[10px] uppercase tracking-wide text-[#1E3A5F] font-semibold mb-1">
-          How to read this card
-        </p>
-        <p className="text-[11px] text-[#1E3A5F] leading-relaxed">
-          Acquisition typically costs a <strong>one-time goodwill
-          premium</strong> at close (often 2.0-3.0× book value). Per-home
-          production economics post-close revert to market rate — not the
-          figure below. This is a <em>comparator</em>, not a forever cost.
-          A proper total-cost-of-entry view is coming in a future update.
+
+      {targets.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center py-8 px-4 rounded-lg bg-gray-50 border border-dashed border-gray-200">
+          <p className="text-xs text-[#6B7280] text-center leading-relaxed">
+            No public builders cited this market in their earnings
+            narratives. That doesn&apos;t mean the market is empty —
+            regional and private builders aren&apos;t covered in this
+            view yet (see note below).
+          </p>
+        </div>
+      ) : (
+        <ul className="space-y-2 flex-1">
+          {targets.slice(0, 8).map((t) => (
+            <li
+              key={t.ticker}
+              className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-100 last:border-b-0"
+            >
+              <span className="min-w-0 text-sm">
+                <span className="font-bold text-[#1E293B]">{t.ticker}</span>
+                {t.companyName && (
+                  <span className="text-[#6B7280] ml-1.5">
+                    · {t.companyName}
+                  </span>
+                )}
+              </span>
+              <span className="shrink-0 flex items-center gap-2 text-[10px]">
+                <span
+                  className={
+                    "uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded " +
+                    (t.confidence.toLowerCase() === "high"
+                      ? "bg-[#ECFDF5] text-[#065F46]"
+                      : t.confidence.toLowerCase() === "medium"
+                      ? "bg-[#FFF7ED] text-[#9A3412]"
+                      : "bg-gray-100 text-[#6B7280]")
+                  }
+                >
+                  {t.confidence}
+                </span>
+                <span className="text-[#6B7280]">{t.mentionCount}× cited</span>
+              </span>
+            </li>
+          ))}
+          {targets.length > 8 && (
+            <li className="text-[11px] text-[#6B7280] pt-1">
+              +{targets.length - 8} more
+            </li>
+          )}
+        </ul>
+      )}
+
+      {/* Honest coverage note */}
+      <div className="mt-4 pt-3 border-t border-gray-100">
+        <p className="text-[10px] text-[#6B7280] leading-snug">
+          <strong className="text-[#1E293B]">Coverage:</strong>{" "}
+          Public-builder presence extracted from earnings narratives
+          (high-confidence signal). Private-builder and regional-
+          operator presence (NAHB Builder 100, local builders)
+          pending a Phase 4 data pipeline.
         </p>
       </div>
-      <StatLine
-        label="Goodwill premium per steady-state unit"
-        value={fmtDollarsFull(acquisition.estimatedCostPerUnit)}
-        emphasis
-      />
-      <StatLine
-        label="Assumed multiple"
-        value={`${acquisition.assumedMultiple.toFixed(1)}× organic capital`}
-      />
-      <StatLine
-        label="Credible targets"
-        value={`${acquisition.targets.length} public builder${
-          acquisition.targets.length === 1 ? "" : "s"
-        }`}
-      />
-      {acquisition.targets.length > 0 && (
-        <div className="mt-5 pt-4 border-t border-gray-100">
-          <p className="text-[10px] uppercase tracking-wide text-[#6B7280] mb-2">
-            Who&apos;s here
+    </div>
+  );
+}
+
+/**
+ * Acquisition Targets — the CEO decides suitability.
+ * Lists the same public builders but framed as *potential* targets
+ * the CEO evaluates themselves. No auto-applied multiples and no
+ * per-unit goodwill numbers — those produced nonsense when the
+ * targets in a market were much larger than the CEO's own org
+ * (e.g. a 5,000-closings/yr Beazer looking at DHI and MTH).
+ *
+ * Phase 3.11 will rebuild this card into a proper total-cost-of-
+ * entry view that accounts for acquirer-vs-target scale, book
+ * value, and integration cost.
+ */
+function AcquisitionTargetsCard({
+  acquisition,
+}: {
+  acquisition: AcquisitionOutput;
+}) {
+  const targets = acquisition.targets;
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-6 flex flex-col">
+      <div className="flex items-baseline justify-between mb-1">
+        <h2 className="text-lg font-bold text-[#1E293B]">
+          Acquisition Targets
+        </h2>
+        <span className="text-[10px] uppercase tracking-wide text-[#6B7280] font-semibold">
+          CEO call
+        </span>
+      </div>
+      <p className="text-xs text-[#6B7280] mb-4">
+        Who could plausibly be acquired to accelerate entry —{" "}
+        <em>you</em> decide suitability, not the model.
+      </p>
+
+      <div className="mb-4 rounded-lg bg-[#FFF7ED] border border-[#FED7AA] p-3">
+        <p className="text-[10px] uppercase tracking-wide text-[#9A3412] font-semibold mb-1">
+          How to read this card
+        </p>
+        <p className="text-[11px] text-[#9A3412] leading-relaxed">
+          Builders are listed the same as the Competitive Landscape —
+          this card doesn&apos;t flag which ones are acquirable. That
+          depends on your org size, their willingness, and capital
+          context the tool doesn&apos;t have. Typical M&A range is{" "}
+          <strong>2.0–3.0× book value</strong> (1.5× distressed,
+          3–4× premium). Larger builders rarely get acquired by
+          smaller ones.
+        </p>
+      </div>
+
+      {targets.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center py-8 px-4 rounded-lg bg-gray-50 border border-dashed border-gray-200">
+          <p className="text-xs text-[#6B7280] text-center leading-relaxed">
+            No public builders cited this market. Acquisition is
+            unlikely to be a realistic entry path here.
           </p>
-          <ul className="space-y-1.5">
-            {acquisition.targets.slice(0, 6).map((t) => (
-              <li
-                key={t.ticker}
-                className="flex items-center justify-between text-xs"
-              >
-                <span className="text-[#1E293B]">
-                  <span className="font-semibold">{t.ticker}</span>
-                  {t.companyName && (
-                    <span className="text-[#6B7280]"> · {t.companyName}</span>
-                  )}
-                </span>
-                <span className="text-[#6B7280]">
-                  {t.confidence} · {t.mentionCount}×
-                </span>
-              </li>
-            ))}
-          </ul>
-          {acquisition.targets.length > 6 && (
-            <p className="mt-2 text-[11px] text-[#6B7280]">
-              +{acquisition.targets.length - 6} more
-            </p>
-          )}
         </div>
+      ) : (
+        <ul className="space-y-1.5 flex-1">
+          {targets.slice(0, 8).map((t) => (
+            <li
+              key={t.ticker}
+              className="flex items-center justify-between gap-3 py-1 text-xs"
+            >
+              <span className="min-w-0 text-[#1E293B]">
+                <span className="font-semibold">{t.ticker}</span>
+                {t.companyName && (
+                  <span className="text-[#6B7280]"> · {t.companyName}</span>
+                )}
+              </span>
+              <span className="shrink-0 text-[#6B7280] text-[11px]">
+                {t.firstSeenYear && t.lastSeenYear
+                  ? t.firstSeenYear === t.lastSeenYear
+                    ? t.lastSeenYear
+                    : `${t.firstSeenYear}–${t.lastSeenYear}`
+                  : ""}
+              </span>
+            </li>
+          ))}
+          {targets.length > 8 && (
+            <li className="text-[11px] text-[#6B7280] pt-1">
+              +{targets.length - 8} more
+            </li>
+          )}
+        </ul>
       )}
     </div>
   );

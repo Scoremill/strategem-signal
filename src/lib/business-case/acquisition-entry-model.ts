@@ -1,66 +1,50 @@
 /**
  * Acquisition Entry Model — pure scorer.
  *
- * Drew's Phase 3 decision: we do NOT try to value individual targets
- * with precision. That's an M&A team's job with a data room, and the
- * signal would be garbage without one. What we CAN do is surface the
- * public builders known to operate in a market (from Filter 4) plus a
- * generic industry-typical acquisition multiple, and compute an
- * estimated cost-per-unit that sits side-by-side with the organic
- * model's number.
+ * Phase 3.10b scope: surface the public builders operating in the
+ * market from Filter 4 as competitive intelligence. The model does
+ * NOT compute a per-builder acquisition cost, does NOT apply a
+ * blanket multiple to organic capital, and does NOT label any
+ * specific builder as an acquisition "target." The CEO decides
+ * target suitability — the tool just tells them who's here.
  *
- * The value of this view: it lets the CEO say in a board room, "To
- * enter Denver organically costs $X per unit. To buy our way in at a
- * typical 2.5x multiple of a target like LEN's Denver division costs
- * roughly $Y per unit. Here is why one wins over the other given our
- * capital situation, our time-to-impact target, and our tolerance for
- * integration risk."
+ * Why the rewrite: the prior version multiplied organic capital-per-
+ * unit by 2.5× and called it an "acquisition cost comparator." That
+ * produced nonsense when a smaller builder (e.g. Beazer, ~5k
+ * closings/yr) looked at a market where the incumbents are DHI
+ * (~90k/yr) and MTH (~13k/yr) — the small-acquires-large framing
+ * is backwards in real homebuilding M&A. We kept the raw targets
+ * list (useful competitive signal) and stripped the fake math.
  *
- * Design decisions (locked with Drew during Phase 3.2):
- *
- *   1. Targets come from Filter 4 (ops_builder_markets). Those are the
- *      builders whose earnings narratives cite the market by name.
- *      Confidence ranks high/medium/low per the extractor.
- *
- *   2. The default assumed multiple is 2.5x book value. That is the
- *      broad industry range per NAHB published comparables for public
- *      homebuilder roll-ups. CEO can override via slider in Phase 3.6.
- *
- *   3. Estimated cost per unit is computed as:
- *        assumedMultiple × blendedCapitalPerUnit(organic model)
- *      This is NOT a valuation. It is a directional comparator to the
- *      organic cost-per-unit so the CEO can reason about whether
- *      "paying 2.5x for a running start" pencils out versus "building
- *      from scratch at 1.0x but waiting 18 months."
- *
- *   4. No target-specific cost per unit. If we started pricing
- *      individual builders we would mislead the CEO — the actual deal
- *      price depends on a thousand private diligence items we can't
- *      see from public data.
+ * Phase 3.11 will rebuild this with a proper total-cost-of-entry
+ * model that respects acquirer-vs-target scale, book value, and
+ * integration cost.
  */
-import type {
-  AcquisitionOutput,
-  AcquisitionTarget,
-} from "./types";
+import type { AcquisitionOutput, AcquisitionTarget } from "./types";
 
-/** Industry-standard acquisition multiple per NAHB published comps. */
+/**
+ * Typical industry multiple range kept ONLY so the UI can cite a
+ * range (1.5× distressed, 2–3× typical, 3–4× premium) for context.
+ * Not applied to any specific builder or target.
+ */
 const DEFAULT_ACQUISITION_MULTIPLE = 2.5;
 
 export interface AcquisitionRawInputs {
   /** All public builders known to operate in the target market, from Filter 4. */
   targets: AcquisitionTarget[];
   /**
-   * Organic model blended capital per unit for the same market. We
-   * use this as the base for the acquisition cost comparator — the
-   * idea being "what a running start on the same ground costs."
+   * Kept in the input shape for backward compatibility with callers
+   * but no longer used to compute a per-unit comparator. The CEO
+   * decides acquisition suitability; the tool doesn't pretend to.
    */
   organicCapitalPerUnit: number | null;
 }
 
 export interface AcquisitionInputs {
   /**
-   * User-tunable multiple. Defaults to 2.5x. CEO can stress-test
-   * between ~1.5x (distressed) and ~4x (premium roll-up).
+   * Kept for backward compatibility with any saved business case
+   * that recorded a multipleOverride. Not applied to any specific
+   * builder — the card shows the typical range as context only.
    */
   multipleOverride?: number;
 }
@@ -74,16 +58,7 @@ export function computeAcquisitionEntry(
 
   if (raw.targets.length === 0) {
     warnings.push(
-      "No public builders cited this market in their earnings narratives (Filter 4). Acquisition entry is likely infeasible — there is no running start to buy."
-    );
-  }
-
-  let estimatedCostPerUnit: number | null = null;
-  if (raw.organicCapitalPerUnit !== null && raw.organicCapitalPerUnit > 0) {
-    estimatedCostPerUnit = Math.round(raw.organicCapitalPerUnit * multiple);
-  } else {
-    warnings.push(
-      "Organic cost per unit unavailable — cannot derive acquisition comparator."
+      "No public builders cited this market. Regional and private builders are not yet covered in the Competitive Landscape view."
     );
   }
 
@@ -99,20 +74,20 @@ export function computeAcquisitionEntry(
   return {
     targets: ranked,
     assumedMultiple: multiple,
-    estimatedCostPerUnit,
+    // Explicitly null — we no longer compute a per-unit goodwill
+    // comparator. Phase 3.11 will introduce a proper total-cost-of-
+    // entry number that respects acquirer vs. target scale.
+    estimatedCostPerUnit: null,
     warnings,
   };
 }
 
 /**
- * Side-by-side recommendation helper. Returns one of:
- *   "organic"      — organic entry is clearly cheaper per unit
- *   "acquisition"  — acquisition gets you in fast enough that time value offsets the premium
- *   "pass"         — neither path is attractive (margins too thin, no targets)
- *
- * Rationale is a plain-English one-liner the UI surfaces as a chip.
- * The recommendation is advisory, not prescriptive — per Drew's core
- * principle, the app narrates the data and the CEO makes the call.
+ * Recommendation helper. With the per-unit acquisition comparator
+ * removed, the model only has grounds to recommend "organic" or
+ * "pass" — it doesn't know enough about any specific builder to
+ * declare "Lean Acquisition" credibly. The CEO decides acquisition
+ * on their own read of the Competitive Landscape + Targets cards.
  */
 export function recommendEntryPath(args: {
   organicCapitalPerUnit: number | null;
@@ -125,11 +100,8 @@ export function recommendEntryPath(args: {
     organicCapitalPerUnit,
     organicBlendedMargin,
     organicMonthsToFirstClosing,
-    acquisitionCostPerUnit,
-    acquisitionTargetCount,
   } = args;
 
-  // Pass case — nothing to recommend
   if (organicCapitalPerUnit === null) {
     return {
       recommendation: "pass",
@@ -140,37 +112,23 @@ export function recommendEntryPath(args: {
   if (organicBlendedMargin !== null && organicBlendedMargin < 10) {
     return {
       recommendation: "pass",
-      rationale: `Blended organic margin of ${organicBlendedMargin.toFixed(1)}% is too thin to justify either entry path. Consider a different market or revisit the portfolio mix.`,
+      rationale: `Blended organic margin of ${organicBlendedMargin.toFixed(1)}% is too thin to justify entry at current inputs. Pull the sliders, revisit the land cost share, or consider a different market.`,
     };
   }
 
-  // If organic is slow AND there are credible targets at a reasonable premium,
-  // favor acquisition to capture time value.
-  const organicIsSlow =
-    organicMonthsToFirstClosing !== null && organicMonthsToFirstClosing >= 15;
-  const acquisitionIsCredible =
-    acquisitionTargetCount >= 2 && acquisitionCostPerUnit !== null;
-
-  if (organicIsSlow && acquisitionIsCredible && acquisitionCostPerUnit !== null) {
-    const premium = acquisitionCostPerUnit / organicCapitalPerUnit;
-    if (premium <= 3.0) {
-      return {
-        recommendation: "acquisition",
-        rationale: `Organic entry takes ~${organicMonthsToFirstClosing!.toFixed(0)} months to first closing. With ${acquisitionTargetCount} credible public builders already operating here, acquiring one at ~${premium.toFixed(1)}x cost-per-unit gets you a running start in months rather than years.`,
-      };
-    }
-  }
-
-  // Default: organic if the margin is healthy
   if (organicBlendedMargin !== null && organicBlendedMargin >= 15) {
+    const months =
+      organicMonthsToFirstClosing !== null
+        ? ` Expected ~${organicMonthsToFirstClosing.toFixed(0)} months to first closing.`
+        : "";
     return {
       recommendation: "organic",
-      rationale: `Organic entry at $${Math.round(organicCapitalPerUnit).toLocaleString()} per unit produces a ${organicBlendedMargin.toFixed(1)}% blended margin on the portfolio mix. Acquisition path adds roughly ${acquisitionCostPerUnit !== null ? `${(acquisitionCostPerUnit / organicCapitalPerUnit).toFixed(1)}x` : "a typical 2.5x"} premium without a corresponding margin lift.`,
+      rationale: `Organic entry at $${Math.round(organicCapitalPerUnit).toLocaleString()} per unit produces a ${organicBlendedMargin.toFixed(1)}% blended margin. ${months} Acquisition remains a CEO call — review the Competitive Landscape for incumbents.`,
     };
   }
 
   return {
     recommendation: "organic",
-    rationale: `Organic entry produces the cleanest risk-adjusted basis at $${Math.round(organicCapitalPerUnit).toLocaleString()} per unit, though the margin is slim. Consider stress-testing the land-mix sliders before committing.`,
+    rationale: `Organic entry produces the cleanest basis at $${Math.round(organicCapitalPerUnit).toLocaleString()} per unit, though the margin is slim. Stress-test the sliders before committing.`,
   };
 }
