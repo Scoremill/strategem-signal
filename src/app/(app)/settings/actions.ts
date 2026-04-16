@@ -14,6 +14,7 @@ import {
   WEIGHT_PRESETS,
   type PresetName,
 } from "@/lib/scoring/weight-presets";
+import { recordAudit } from "@/lib/audit";
 
 /**
  * Persist a user's personal market filter.
@@ -75,6 +76,20 @@ export async function saveTrackedMarkets(geographyIds: string[]) {
     );
   }
 
+  if (toAdd.length > 0 || toRemoveRowIds.length > 0) {
+    await recordAudit({
+      orgId: session.orgId,
+      userId: session.userId,
+      action: "tracked_markets.updated",
+      entityType: "tracked_markets",
+      after: {
+        added: toAdd,
+        removedRowIds: toRemoveRowIds,
+        totalAfter: desired.length,
+      },
+    });
+  }
+
   revalidatePath("/settings");
   return {
     ok: true as const,
@@ -129,6 +144,14 @@ export async function saveWeightPreset(presetName: string) {
       },
     });
 
+  await recordAudit({
+    orgId: session.orgId,
+    userId: session.userId,
+    action: "weights.updated",
+    entityType: "health_score_weights",
+    after: { presetName: preset.name, weights: preset.weights },
+  });
+
   revalidatePath("/settings");
   return { ok: true as const, preset: preset.name };
 }
@@ -175,6 +198,14 @@ export async function toggleWatchlistMarket(
         )
       );
   }
+
+  await recordAudit({
+    orgId: session.orgId,
+    userId: session.userId,
+    action: desired ? "watchlist.added" : "watchlist.removed",
+    entityType: "watchlist_markets",
+    entityId: geographyId,
+  });
 
   revalidatePath("/opportunities");
   return { ok: true as const, onWatchlist: desired };

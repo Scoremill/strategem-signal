@@ -13,6 +13,7 @@ import { tenantQuery } from "@/lib/db";
 import { businessCases } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { recordAudit } from "@/lib/audit";
 import type {
   BusinessCaseInputs,
   OrganicOutput,
@@ -50,11 +51,26 @@ export async function saveBusinessCase(args: SaveBusinessCaseArgs) {
     shared: false,
   });
 
+  const row = (inserted as Array<{ id: string }>)[0];
+
+  await recordAudit({
+    orgId: session.orgId,
+    userId: session.userId,
+    action: "business_case.saved",
+    entityType: "business_case",
+    entityId: row?.id ?? null,
+    after: {
+      title,
+      geographyId: args.geographyId,
+      recommendation: args.recommendation,
+      executionPosture: args.inputs.operationalExecution,
+    },
+  });
+
   revalidatePath(`/markets/${args.geographyId}`);
   revalidatePath(`/markets/${args.geographyId}/business-case`);
   revalidatePath(`/business-cases`);
 
-  const row = (inserted as Array<{ id: string }>)[0];
   return { ok: true as const, id: row?.id ?? null };
 }
 
@@ -80,6 +96,15 @@ export async function toggleShareBusinessCase(
     return { ok: false as const, error: "Case not found" };
   }
 
+  await recordAudit({
+    orgId: session.orgId,
+    userId: session.userId,
+    action: shared ? "business_case.shared" : "business_case.unshared",
+    entityType: "business_case",
+    entityId: caseId,
+    after: { shared },
+  });
+
   revalidatePath("/business-cases");
   return { ok: true as const };
 }
@@ -100,6 +125,14 @@ export async function deleteBusinessCase(caseId: string) {
   if ((deleted as unknown[]).length === 0) {
     return { ok: false as const, error: "Case not found" };
   }
+
+  await recordAudit({
+    orgId: session.orgId,
+    userId: session.userId,
+    action: "business_case.deleted",
+    entityType: "business_case",
+    entityId: caseId,
+  });
 
   revalidatePath("/business-cases");
   return { ok: true as const };
