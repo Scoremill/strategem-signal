@@ -21,6 +21,7 @@ import {
 import {
   classifyMarketTier,
   defaultInputsForTier,
+  EXECUTION_PROFILES,
 } from "@/lib/business-case/types";
 import { saveBusinessCase } from "./actions";
 import BusinessCasePdfTemplate from "./BusinessCasePdfTemplate";
@@ -29,6 +30,7 @@ import type {
   AcquisitionOutput,
   AcquisitionTarget,
   BusinessCaseInputs,
+  OperationalExecution,
   OrganicBucketOutput,
   OrganicOutput,
 } from "@/lib/business-case/types";
@@ -172,7 +174,7 @@ export default function BusinessCaseClient({
   function openSaveDialog() {
     // Seed a sensible default title so the CEO doesn't have to type one
     const date = new Date().toISOString().slice(0, 10);
-    const defaultTitle = `${marketLabel} — ${inputs.landSharePct}% land, ${inputs.landMix.pctFinished}/${inputs.landMix.pctRaw}/${inputs.landMix.pctOptioned} mix (${date})`;
+    const defaultTitle = `${marketLabel} — ${inputs.landCostSharePct}% land, ${inputs.landMix.pctFinished}/${inputs.landMix.pctRaw}/${inputs.landMix.pctOptioned} mix (${date})`;
     setSaveTitle(defaultTitle);
     setSaveNotes("");
     setSaveMsg(null);
@@ -417,26 +419,14 @@ function ControlsPanel({
       </div>
 
       <SliderField
-        label="Land share"
-        value={inputs.landSharePct}
+        label="Land cost share"
+        value={inputs.landCostSharePct}
         min={10}
         max={50}
         step={1}
         unit="%"
         hint="% of sale price allocated to raw land"
-        onChange={(v) => onField("landSharePct", v)}
-      />
-
-      <SliderField
-        label="Build cost multiplier"
-        value={inputs.buildCostMultiplier}
-        min={0.8}
-        max={1.2}
-        step={0.05}
-        unit="×"
-        decimals={2}
-        hint="±20% around QCEW-derived baseline"
-        onChange={(v) => onField("buildCostMultiplier", v)}
+        onChange={(v) => onField("landCostSharePct", v)}
       />
 
       <SliderField
@@ -452,18 +442,6 @@ function ControlsPanel({
       />
 
       <SliderField
-        label="SG&A stack"
-        value={inputs.sgaMultiplier}
-        min={0.6}
-        max={1.4}
-        step={0.05}
-        unit="×"
-        decimals={2}
-        hint="1.0× = industry default (finished 8%, raw 10%, optioned 6%)"
-        onChange={(v) => onField("sgaMultiplier", v)}
-      />
-
-      <SliderField
         label="Year-one volume"
         value={inputs.targetUnitsPerYear}
         min={100}
@@ -473,6 +451,23 @@ function ControlsPanel({
         hint="Target closings in year one"
         onChange={(v) => onField("targetUnitsPerYear", v)}
       />
+
+      {/* Operational Execution toggle — replaces the separate build-
+          cost and SG&A multiplier sliders. One CEO-facing control
+          that moves turns, SG&A, and build-cost efficiency together
+          to a coherent profile. */}
+      <div className="mt-5 pt-5 border-t border-gray-100">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-2">
+          Operational Execution
+        </p>
+        <ExecutionToggle
+          value={inputs.operationalExecution}
+          onChange={(v) => onField("operationalExecution", v)}
+        />
+        <p className="text-[10px] text-[#6B7280] mt-2 leading-relaxed">
+          {EXECUTION_PROFILES[inputs.operationalExecution].description}
+        </p>
+      </div>
 
       {/* Portfolio mix */}
       <div className="mt-5 pt-5 border-t border-gray-100">
@@ -529,6 +524,50 @@ function ControlsPanel({
           onChange={onMultiple}
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Segmented three-position control for Operational Execution.
+ * Replaces the separate Build Cost Multiplier and SG&A sliders with
+ * one coherent posture that moves turns, SG&A, and build-cost
+ * efficiency together. Default is Average so the CEO's first read
+ * is the honest baseline, not a stretch scenario.
+ */
+function ExecutionToggle({
+  value,
+  onChange,
+}: {
+  value: OperationalExecution;
+  onChange: (v: OperationalExecution) => void;
+}) {
+  const options: Array<{ key: OperationalExecution; label: string }> = [
+    { key: "average", label: "Average" },
+    { key: "strong", label: "Strong" },
+    { key: "best_in_class", label: "Best-in-class" },
+  ];
+  return (
+    <div className="inline-flex w-full rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+      {options.map((opt) => {
+        const active = opt.key === value;
+        return (
+          <button
+            key={opt.key}
+            type="button"
+            onClick={() => onChange(opt.key)}
+            className={
+              "flex-1 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors " +
+              (active
+                ? "bg-[#F97316] text-white shadow-sm"
+                : "text-[#6B7280] hover:text-[#1E293B]")
+            }
+            aria-pressed={active}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -622,20 +661,66 @@ function TierChip({
       ? "bg-[#ECFDF5] text-[#065F46] border-[#10B981]"
       : tier.tier === "B"
       ? "bg-[#FFF7ED] text-[#9A3412] border-[#F97316]"
-      : "bg-[#EFF6FF] text-[#1E3A5F] border-[#3B82F6]";
+      : tier.tier === "C"
+      ? "bg-[#EFF6FF] text-[#1E3A5F] border-[#3B82F6]"
+      : "bg-[#F3E8FF] text-[#5B21B6] border-[#8B5CF6]";
+  const premiumPct = Math.round((tier.newConstructionPremium - 1) * 100);
   return (
     <div className="mb-4 flex items-center gap-3 flex-wrap">
-      <span
-        className={`rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${color}`}
-      >
-        {tier.label}
-      </span>
-      <span className="text-[11px] text-[#6B7280] leading-tight">
-        Defaults: {tier.medianHomeSqft.toLocaleString()} sqft · $
-        {tier.baseBuildCostPerSqft}/sqft base · {tier.landSharePct}% land
-        share · +{Math.round((tier.newConstructionPremium - 1) * 100)}%
-        new-construction premium. Pull the sliders if your basis is
-        different.
+      <span className="group relative inline-block">
+        <span
+          className={`cursor-help inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${color}`}
+        >
+          {tier.label}
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 16 16"
+            fill="none"
+            className="opacity-70"
+          >
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.2" />
+            <path
+              d="M8 7v3.5M8 5v0.01"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+            />
+          </svg>
+        </span>
+        {/* Hover tooltip — active tier's defaults only */}
+        <span
+          className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-80 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+          role="tooltip"
+        >
+          <span className="block rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1.5">
+              {tier.label} defaults
+            </span>
+            <span className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+              <span className="text-[#6B7280]">Median home size</span>
+              <span className="font-semibold text-[#1E293B] text-right">
+                {tier.medianHomeSqft.toLocaleString()} sqft
+              </span>
+              <span className="text-[#6B7280]">Base build cost</span>
+              <span className="font-semibold text-[#1E293B] text-right">
+                ${tier.baseBuildCostPerSqft}/sqft
+              </span>
+              <span className="text-[#6B7280]">Land cost share</span>
+              <span className="font-semibold text-[#1E293B] text-right">
+                {tier.landCostSharePct}%
+              </span>
+              <span className="text-[#6B7280]">New-construction premium</span>
+              <span className="font-semibold text-[#1E293B] text-right">
+                +{premiumPct}% vs ZHVI
+              </span>
+            </span>
+            <span className="block mt-2 pt-2 border-t border-gray-100 text-[10px] text-[#6B7280] leading-snug">
+              These defaults calibrate the model to this metro tier. Pull
+              the sliders if your basis is different.
+            </span>
+          </span>
+        </span>
       </span>
     </div>
   );
@@ -715,7 +800,7 @@ function AssumptionsStrip({
         <AssumptionTile
           label="Raw land per unit"
           value={fmtDollarsFull(a.landCostPerUnit)}
-          sub={`${inputs.landSharePct}% land share`}
+          sub={`${inputs.landCostSharePct}% land cost share`}
         />
         <AssumptionTile
           label="Base build cost"
@@ -808,17 +893,29 @@ function AcquisitionCard({
           Comparator
         </span>
       </div>
-      <p className="text-xs text-[#6B7280] mb-5">
+      <p className="text-xs text-[#6B7280] mb-4">
         Buy a running start — directional only, not a deal quote.
       </p>
+      <div className="mb-4 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] p-3">
+        <p className="text-[10px] uppercase tracking-wide text-[#1E3A5F] font-semibold mb-1">
+          How to read this card
+        </p>
+        <p className="text-[11px] text-[#1E3A5F] leading-relaxed">
+          Acquisition typically costs a <strong>one-time goodwill
+          premium</strong> at close (often 2.0-3.0× book value). Per-home
+          production economics post-close revert to market rate — not the
+          figure below. This is a <em>comparator</em>, not a forever cost.
+          A proper total-cost-of-entry view is coming in a future update.
+        </p>
+      </div>
       <StatLine
-        label="Estimated cost per unit"
+        label="Goodwill premium per steady-state unit"
         value={fmtDollarsFull(acquisition.estimatedCostPerUnit)}
         emphasis
       />
       <StatLine
         label="Assumed multiple"
-        value={`${acquisition.assumedMultiple.toFixed(1)}× organic`}
+        value={`${acquisition.assumedMultiple.toFixed(1)}× organic capital`}
       />
       <StatLine
         label="Credible targets"

@@ -179,10 +179,13 @@ export default function BusinessCasePdfTemplate({
                 marginTop: 2,
               }}
             >
-              {organic.tierLabel} · defaults:{" "}
+              {organic.tierLabel} · Operational execution:{" "}
+              <strong style={{ color: C.body }}>
+                {organic.executionLabel}
+              </strong>
+              {" · "}
               {organic.assumptions.medianHomeSqft?.toLocaleString() ?? "—"} sqft
-              · ${organic.assumptions.baseBuildCostPerSqft ?? "—"}/sqft base ·
-              {" "}
+              · ${organic.assumptions.baseBuildCostPerSqft ?? "—"}/sqft base ·{" "}
               {organic.assumptions.newConstructionPremium != null
                 ? `+${Math.round((organic.assumptions.newConstructionPremium - 1) * 100)}% new-construction premium`
                 : ""}
@@ -273,7 +276,7 @@ export default function BusinessCasePdfTemplate({
         <KpiTile
           label="Raw land per unit"
           value={fmtDollarsFull(organic.assumptions.landCostPerUnit)}
-          sub={`${inputs.landSharePct}% land share`}
+          sub={`${inputs.landCostSharePct}% land cost share`}
         />
         <KpiTile
           label="Base build cost"
@@ -581,9 +584,9 @@ export default function BusinessCasePdfTemplate({
         }}
       >
         <strong style={{ color: C.body }}>Inputs:</strong>{" "}
-        {inputs.landSharePct}% land share · build {inputs.buildCostMultiplier}× ·
-        absorption {inputs.absorptionMultiplier}× · SG&amp;A{" "}
-        {inputs.sgaMultiplier}× ·{" "}
+        {inputs.landCostSharePct}% land cost share · absorption{" "}
+        {inputs.absorptionMultiplier}× · operational execution{" "}
+        <strong style={{ color: C.body }}>{organic.executionLabel}</strong> ·{" "}
         {inputs.targetUnitsPerYear.toLocaleString()} units/yr · mix{" "}
         {inputs.landMix.pctFinished}/{inputs.landMix.pctRaw}/
         {inputs.landMix.pctOptioned} finished/raw/optioned · horizontal{" "}

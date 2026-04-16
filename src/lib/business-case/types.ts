@@ -30,7 +30,7 @@ export interface LandMix {
 /**
  * Market tier classification, set automatically from the market's
  * median home price. Drives the calibrated defaults for square
- * footage, land share, base build cost, and new-construction
+ * footage, land cost share, base build cost, and new-construction
  * premium — each of these varies meaningfully by metro tier and
  * applying Atlanta-grade defaults to Jackson produced nonsense
  * (Phase 3.10 fix).
@@ -49,8 +49,8 @@ export interface MarketTierDefaults {
   label: string;
   /** Median home square footage for this tier. */
   medianHomeSqft: number;
-  /** Default raw land share as % of sale price. */
-  landSharePct: number;
+  /** Default raw land cost share as % of sale price. */
+  landCostSharePct: number;
   /** Base build cost $/sqft at the national-median construction wage. */
   baseBuildCostPerSqft: number;
   /**
@@ -71,7 +71,7 @@ export const MARKET_TIERS: Record<MarketTier, MarketTierDefaults> = {
     tier: "A",
     label: "Tier A · Low cost",
     medianHomeSqft: 1800,
-    landSharePct: 15,
+    landCostSharePct: 15,
     baseBuildCostPerSqft: 75,
     newConstructionPremium: 1.15,
     zhviMin: 0,
@@ -81,7 +81,7 @@ export const MARKET_TIERS: Record<MarketTier, MarketTierDefaults> = {
     tier: "B",
     label: "Tier B · Mid cost",
     medianHomeSqft: 2200,
-    landSharePct: 22,
+    landCostSharePct: 22,
     baseBuildCostPerSqft: 78,
     newConstructionPremium: 1.08,
     zhviMin: 250000,
@@ -91,7 +91,7 @@ export const MARKET_TIERS: Record<MarketTier, MarketTierDefaults> = {
     tier: "C",
     label: "Tier C · High cost",
     medianHomeSqft: 2500,
-    landSharePct: 30,
+    landCostSharePct: 30,
     baseBuildCostPerSqft: 85,
     newConstructionPremium: 1.05,
     zhviMin: 550000,
@@ -101,7 +101,7 @@ export const MARKET_TIERS: Record<MarketTier, MarketTierDefaults> = {
     tier: "D",
     label: "Tier D · Ultra-high cost",
     medianHomeSqft: 2500,
-    landSharePct: 40,
+    landCostSharePct: 40,
     baseBuildCostPerSqft: 90,
     newConstructionPremium: 1.03,
     zhviMin: 900000,
@@ -127,23 +127,82 @@ export function classifyMarketTier(
   return MARKET_TIERS.D;
 }
 
+// ─── Operational Execution ──────────────────────────────────────
+//
+// A single CEO-facing control that encodes a coherent operating
+// profile. Moves turns, SG&A, and build-cost efficiency together to
+// a credible combination. The CEO picks a posture; the model
+// responds. No fantasy-combination failure mode because the three
+// levers are coupled.
+
+export type OperationalExecution = "average" | "strong" | "best_in_class";
+
+export interface OperationalExecutionProfile {
+  key: OperationalExecution;
+  label: string;
+  /** One-line description grounded in real-world operator language. */
+  description: string;
+  /** Turns/yr by bucket at this execution level. */
+  turnsByBucket: {
+    finished: number;
+    raw: number;
+    optioned: number;
+  };
+  /**
+   * Multiplier on the per-bucket SG&A defaults (finished 8%, raw 10%,
+   * optioned 6%). <1.0 = leaner overhead, >1.0 = heavier. Strong/Best
+   * operators run leaner.
+   */
+  sgaMultiplier: number;
+  /**
+   * Multiplier on the tier's base build cost. Strong/Best operators
+   * get real unit savings from purchasing discipline and lower
+   * rework — typically 5-10% below market.
+   */
+  buildCostMultiplier: number;
+}
+
+export const EXECUTION_PROFILES: Record<
+  OperationalExecution,
+  OperationalExecutionProfile
+> = {
+  average: {
+    key: "average",
+    label: "Average",
+    description:
+      "Industry-median execution. Turns, SG&A, and build cost in line with the public-builder peer group (LEN, DHI, PHM).",
+    turnsByBucket: { finished: 2.5, raw: 1.0, optioned: 3.0 },
+    sgaMultiplier: 1.0,
+    buildCostMultiplier: 1.0,
+  },
+  strong: {
+    key: "strong",
+    label: "Strong",
+    description:
+      "Above the public-builder median. Top divisions of a top-20 builder: faster turns, sub-9% SG&A, meaningful purchasing leverage.",
+    turnsByBucket: { finished: 3.0, raw: 1.25, optioned: 3.5 },
+    sgaMultiplier: 0.85,
+    buildCostMultiplier: 0.95,
+  },
+  best_in_class: {
+    key: "best_in_class",
+    label: "Best-in-class",
+    description:
+      "NVR-style. Best-in-industry turns, ~7% SG&A, and deep purchasing discipline that earns ~10% below-market hard costs.",
+    turnsByBucket: { finished: 3.25, raw: 1.5, optioned: 4.0 },
+    sgaMultiplier: 0.75,
+    buildCostMultiplier: 0.9,
+  },
+};
+
 export interface BusinessCaseInputs {
   /**
    * Percentage of the finished home sale price allocated to raw
-   * land cost. NAHB's default assumption for Tier 2 metros is 25%;
-   * coastal Tier 1 markets can hit 40%+ while interior Tier 3-4
-   * metros often sit at 10-15%. Default is 25; UI exposes it as a
+   * land cost. Defaulted from the market's tier (Tier A ~15%,
+   * Tier B ~22%, Tier C ~30%, Tier D ~40%). UI exposes it as a
    * slider so the CEO can dial to their known cost structure.
    */
-  landSharePct: number;
-
-  /**
-   * Build cost multiplier applied to the model's base build cost.
-   * 1.0 = use the QCEW-derived default; 0.8-1.2 range on the slider
-   * lets the CEO stress-test what happens if their actual labor
-   * and materials costs are off from the market average.
-   */
-  buildCostMultiplier: number;
+  landCostSharePct: number;
 
   /**
    * Absorption pace multiplier. 1.0 = the model's default absorption
@@ -178,23 +237,24 @@ export interface BusinessCaseInputs {
   optionFeePct: number;
 
   /**
-   * SG&A multiplier that scales all three per-bucket SG&A haircuts at
-   * once. 1.0 = the defaults (finished 8%, raw 10%, optioned 6%). CEO
-   * can stress-test their actual overhead stack between 0.6x and 1.4x.
+   * Operational execution posture. Single CEO-facing control that
+   * moves turns, SG&A, and build-cost efficiency together to a
+   * coherent combination. Defaults to "average" for every new case
+   * so the first number the CEO sees is the honest baseline — not
+   * a flattering stretch scenario.
    */
-  sgaMultiplier: number;
+  operationalExecution: OperationalExecution;
 }
 
 /**
- * Legacy static defaults — calibrated to Tier B. Kept for backward
- * compatibility with any code paths that haven't been moved to the
- * tier-aware `defaultInputsForTier()` helper below. New code should
- * always go through `defaultInputsForTier()` so the CEO sees the
- * right starting point for the market they're looking at.
+ * Legacy static defaults — calibrated to Tier B at Average execution.
+ * Kept for backward compatibility with any code paths that haven't
+ * been moved to the tier-aware `defaultInputsForTier()` helper below.
+ * New code should always go through `defaultInputsForTier()` so the
+ * CEO sees the right starting point for the market they're looking at.
  */
 export const DEFAULT_INPUTS: BusinessCaseInputs = {
-  landSharePct: 22,
-  buildCostMultiplier: 1.0,
+  landCostSharePct: 22,
   absorptionMultiplier: 1.0,
   targetUnitsPerYear: 500,
   landMix: {
@@ -204,13 +264,13 @@ export const DEFAULT_INPUTS: BusinessCaseInputs = {
   },
   horizontalPctOfRaw: 40,
   optionFeePct: 5,
-  sgaMultiplier: 1.0,
+  operationalExecution: "average",
 };
 
 /**
- * Tier-aware defaults. The land share flexes per tier; the rest of
- * the inputs (build multiplier, absorption, mix, SG&A) are the same
- * across tiers because those are CEO-level levers, not
+ * Tier-aware defaults. The land cost share flexes per tier; the
+ * rest of the inputs (absorption, mix, operational execution) are
+ * the same across tiers because those are CEO-level levers, not
  * market-structure levers.
  */
 export function defaultInputsForTier(
@@ -218,7 +278,7 @@ export function defaultInputsForTier(
 ): BusinessCaseInputs {
   return {
     ...DEFAULT_INPUTS,
-    landSharePct: tier.landSharePct,
+    landCostSharePct: tier.landCostSharePct,
   };
 }
 
@@ -244,8 +304,8 @@ export interface OrganicBucketOutput {
   /**
    * Capital turns per year for this bucket. Reflects how many times a
    * dollar of invested capital cycles through a cost-of-sales
-   * computation per year, given the bucket's land structure.
-   * Finished ~3, raw ~1, optioned ~4 at defaults.
+   * computation per year, given the bucket's land structure AND the
+   * chosen operational execution posture.
    */
   capitalTurnsPerYear: number | null;
   /**
@@ -276,6 +336,14 @@ export interface OrganicOutput {
    */
   tier: MarketTier;
   tierLabel: string;
+  /**
+   * Operational execution posture used for this computation. Exposed
+   * so the UI + PDF can badge a saved case as "Strong execution" or
+   * "Best-in-class execution" and prevent anyone confusing a stretch
+   * scenario for baseline.
+   */
+  execution: OperationalExecution;
+  executionLabel: string;
   /** Portfolio-weighted capital per unit across all three buckets. */
   blendedCapitalPerUnit: number | null;
   /** Weighted months to first closing. */
@@ -323,8 +391,10 @@ export interface OrganicOutput {
 // Targets + typical multiple. Drew's decision: we do NOT try to value
 // individual targets with precision. We surface the known public
 // builder presence in the market (from Filter 4) and a generic
-// industry-typical multiple, then let the CEO compare the acquisition
-// cost-per-unit to the organic cost-per-unit side by side.
+// industry-typical multiple. Phase 3.11 will rebuild this as a
+// total-cost-of-entry comparison against organic; for now the number
+// is clearly labeled as a goodwill-inclusive comparator, not a
+// per-unit production cost.
 
 export interface AcquisitionTarget {
   ticker: string;
@@ -348,10 +418,12 @@ export interface AcquisitionOutput {
    */
   assumedMultiple: number;
   /**
-   * Estimated acquisition cost per unit at the assumed multiple. This
-   * is the "all-in cost to buy one year's worth of a target's closings
-   * on paper." It is NOT a deal quote — it's a directional comparator
-   * to the organic model's capital per unit.
+   * Goodwill-inclusive comparator: what the CEO should expect to pay
+   * at close, per future steady-state unit, to acquire a running
+   * start in the market. NOT the cost to produce each home under
+   * the acquired business — that reverts to market-rate post-close.
+   * Phase 3.11 will replace this with a proper total-cost-of-entry
+   * model.
    */
   estimatedCostPerUnit: number | null;
   /** Human-readable warnings. */
