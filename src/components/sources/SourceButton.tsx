@@ -39,7 +39,10 @@ export default function SourceButton({
         }}
         aria-label={ariaLabel}
         title={ariaLabel}
-        className="inline-flex items-center justify-center rounded-full text-[#9CA3AF] hover:text-[#F97316] transition-colors"
+        // min-w/h 32px gives iPad/touch a comfortable tap target while
+        // the icon inside stays small. -webkit-tap-highlight-color
+        // suppresses the iOS gray flash on tap.
+        className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-full text-[#9CA3AF] hover:text-[#F97316] transition-colors tap-transparent"
       >
         <svg
           className={sizeClass}
