@@ -92,3 +92,54 @@ CREATE INDEX IF NOT EXISTS idx_market_narratives_geo ON market_narratives (geogr
 -- manually trigger each cron through the GitHub Actions "Run workflow"
 -- button for workflow_dispatch — every workflow in .github/workflows/
 -- is configured to allow manual runs.
+
+-- ── Addendum: reshape tenant tables that had v1 schema on main ────
+-- Applied manually after the merge surfaced 500s on /heatmap.
+-- Three tables had v1 column layouts that couldn't accommodate v2's
+-- per-user-per-org model. All were empty so drop-and-recreate was safe.
+
+DROP TABLE IF EXISTS business_cases CASCADE;
+DROP TABLE IF EXISTS health_score_weights CASCADE;
+DROP TABLE IF EXISTS watchlist_markets CASCADE;
+
+CREATE TABLE health_score_weights (
+    user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_id text NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+    weight_financial numeric(4,3) NOT NULL DEFAULT 0.400,
+    weight_demand numeric(4,3) NOT NULL DEFAULT 0.300,
+    weight_operational numeric(4,3) NOT NULL DEFAULT 0.300,
+    preset_name text NOT NULL DEFAULT 'balanced',
+    updated_at timestamp NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, org_id)
+);
+
+CREATE TABLE watchlist_markets (
+    id text PRIMARY KEY,
+    org_id text NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+    user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    geography_id text NOT NULL REFERENCES geographies(id),
+    notes text,
+    added_at timestamp NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX idx_watchlist_markets_user_geo ON watchlist_markets (user_id, geography_id);
+CREATE INDEX idx_watchlist_markets_user ON watchlist_markets (user_id);
+CREATE INDEX idx_watchlist_markets_org ON watchlist_markets (org_id);
+
+CREATE TABLE business_cases (
+    id text PRIMARY KEY,
+    user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_id text NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+    geography_id text NOT NULL REFERENCES geographies(id),
+    title text NOT NULL,
+    notes text,
+    inputs_json json,
+    organic_outputs_json json,
+    acquisition_outputs_json json,
+    recommendation text,
+    shared boolean NOT NULL DEFAULT false,
+    created_at timestamp NOT NULL DEFAULT NOW(),
+    updated_at timestamp NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_business_cases_user ON business_cases (user_id);
+CREATE INDEX idx_business_cases_geo ON business_cases (geography_id);
+CREATE INDEX idx_business_cases_org ON business_cases (org_id);
