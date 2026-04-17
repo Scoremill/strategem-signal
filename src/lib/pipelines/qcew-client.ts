@@ -62,6 +62,22 @@ export const MSA_COUNTY_FALLBACK: Record<string, string[]> = {
   "27140": ["28029", "28049", "28051", "28089", "28121", "28127", "28163"],
 };
 
+const STATE_FIPS: Record<string, string> = {
+  AL: "01", AK: "02", AZ: "04", AR: "05", CA: "06", CO: "08", CT: "09",
+  DE: "10", DC: "11", FL: "12", GA: "13", HI: "15", ID: "16", IL: "17",
+  IN: "18", IA: "19", KS: "20", KY: "21", LA: "22", ME: "23", MD: "24",
+  MA: "25", MI: "26", MN: "27", MS: "28", MO: "29", MT: "30", NE: "31",
+  NV: "32", NH: "33", NJ: "34", NM: "35", NY: "36", NC: "37", ND: "38",
+  OH: "39", OK: "40", OR: "41", PA: "42", PR: "72", RI: "44", SC: "45",
+  SD: "46", TN: "47", TX: "48", UT: "49", VT: "50", VA: "51", WA: "53",
+  WV: "54", WI: "55", WY: "56",
+};
+
+export function stateToQcewArea(stateAbbr: string): string | null {
+  const fips = STATE_FIPS[stateAbbr.toUpperCase()];
+  return fips ? `${fips}000` : null;
+}
+
 export interface QcewTradeRecord {
   naicsCode: string;
   naicsDescription: string;
@@ -83,7 +99,8 @@ export interface QcewTradeRecord {
 export async function fetchQcewTrades(
   cbsaFips: string,
   year: number,
-  quarter: number
+  quarter: number,
+  stateAbbr?: string
 ): Promise<QcewTradeRecord[]> {
   // Use county aggregation for markets where BLS suppresses MSA-level data
   if (MSA_COUNTY_FALLBACK[cbsaFips]) {
@@ -95,7 +112,11 @@ export async function fetchQcewTrades(
 
   const res = await fetch(url);
   if (!res.ok) {
-    if (res.status === 404) return []; // Quarter not yet available
+    if (res.status === 404) {
+      // MSA not available — try state-level fallback
+      if (stateAbbr) return fetchQcewTradesState(stateAbbr, year, quarter);
+      return [];
+    }
     throw new Error(`QCEW API error ${res.status} for ${areaCode} ${year}Q${quarter}`);
   }
 
@@ -142,7 +163,79 @@ export async function fetchQcewTrades(
     });
   }
 
+  if (records.length === 0 && stateAbbr) {
+    return fetchQcewTradesState(stateAbbr, year, quarter);
+  }
+
   return records;
+}
+
+/**
+ * Fetch state-level QCEW 238x data as a proxy for metros where BLS
+ * suppresses MSA-level construction trade data. State-level data is
+ * always published. Less precise than metro-level but better than
+ * showing no operational score at all.
+ */
+async function fetchQcewTradesState(
+  stateAbbr: string,
+  year: number,
+  quarter: number
+): Promise<QcewTradeRecord[]> {
+  const areaCode = stateToQcewArea(stateAbbr);
+  if (!areaCode) return [];
+
+  const url = `${BASE_URL}/${year}/${quarter}/area/${areaCode}.csv`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+
+    const text = await res.text();
+    const lines = text.split("\n");
+    if (lines.length < 2) return [];
+
+    const headers = parseCSVLine(lines[0]);
+    const records: QcewTradeRecord[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const values = parseCSVLine(lines[i]);
+      const row: Record<string, string> = {};
+      headers.forEach((h, idx) => (row[h] = values[idx] || ""));
+
+      if (row.own_code !== "5") continue;
+      const ic = row.industry_code;
+      if (!TRADE_NAICS.includes(ic)) continue;
+
+      const m1 = parseInt(row.month1_emplvl) || 0;
+      const m2 = parseInt(row.month2_emplvl) || 0;
+      const m3 = parseInt(row.month3_emplvl) || 0;
+      const avgEmp = Math.round((m1 + m2 + m3) / 3);
+      if (avgEmp === 0) continue;
+
+      records.push({
+        naicsCode: ic,
+        naicsDescription: NAICS_DESCRIPTIONS[ic] || ic,
+        avgMonthlyEmployment: avgEmp,
+        totalQuarterlyWages: parseInt(row.total_qtrly_wages) || 0,
+        avgWeeklyWage: parseInt(row.avg_wkly_wage) || 0,
+        establishmentCount: parseInt(row.qtrly_estabs) || 0,
+        wageYoyChangePct: row.oty_avg_wkly_wage_pct_chg
+          ? parseFloat(row.oty_avg_wkly_wage_pct_chg)
+          : null,
+        employmentYoyChangePct: row.oty_month1_emplvl_pct_chg
+          ? parseFloat(row.oty_month1_emplvl_pct_chg)
+          : null,
+      });
+    }
+
+    if (records.length > 0) {
+      console.log(`  [qcew] State fallback ${stateAbbr}: ${records.length} trade sectors`);
+    }
+
+    return records;
+  } catch {
+    return [];
+  }
 }
 
 /**

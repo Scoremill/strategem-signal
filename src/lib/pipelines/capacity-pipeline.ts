@@ -70,7 +70,7 @@ async function runCapacityPipelineInternal(
         // 1-second delay between API calls to be polite to BLS
         await new Promise((r) => setTimeout(r, 1000));
 
-        const trades = await fetchQcewTrades(market.cbsaFips, year, quarter);
+        const trades = await fetchQcewTrades(market.cbsaFips, year, quarter, market.state);
 
         for (const trade of trades) {
           await db
