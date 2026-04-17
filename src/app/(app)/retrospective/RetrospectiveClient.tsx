@@ -255,6 +255,8 @@ export default function RetrospectiveClient({ markets }: Props) {
                         v != null ? Number(v).toFixed(1) : "N/A",
                         "Score",
                       ]}
+                      labelStyle={{ color: "#1E293B", fontWeight: 600 }}
+                      contentStyle={{ borderRadius: 8, border: "1px solid #E5E7EB" }}
                     />
                     <Bar dataKey="score" radius={[4, 4, 0, 0]}>
                       {oppFilters.map((f, i) => (
@@ -311,7 +313,8 @@ export default function RetrospectiveClient({ markets }: Props) {
                     />
                     <Tooltip
                       formatter={(v) => [formatCurrency(Number(v)), "ZHVI"]}
-                      labelStyle={{ fontSize: 11 }}
+                      labelStyle={{ fontSize: 11, color: "#1E293B", fontWeight: 600 }}
+                      contentStyle={{ borderRadius: 8, border: "1px solid #E5E7EB" }}
                     />
                     <Line
                       type="monotone"
@@ -360,6 +363,8 @@ export default function RetrospectiveClient({ markets }: Props) {
                         v != null ? Number(v).toFixed(2) + "%" : "N/A",
                         "YoY",
                       ]}
+                      labelStyle={{ color: "#1E293B", fontWeight: 600 }}
+                      contentStyle={{ borderRadius: 8, border: "1px solid #E5E7EB" }}
                     />
                     <Bar dataKey="yoy" radius={[4, 4, 0, 0]}>
                       {hpiData.map((d, i) => (

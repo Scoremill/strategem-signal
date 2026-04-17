@@ -29,22 +29,17 @@ const ORG_PLACEHOLDER_SECTIONS: Array<{
   {
     title: "Org Profile",
     description: "Organization name, slug, and logo. Used in the topbar and email digest.",
-    status: "Coming in Phase 1",
+    status: "Coming soon",
   },
   {
     title: "Members",
     description: "Invite users, assign roles (CEO, CFO, COO, Division President, Member), or remove access.",
-    status: "Coming in Phase 1",
+    status: "Coming soon",
   },
   {
     title: "Subscription",
     description: "Manage your StrategemSignal subscription via Stripe. View invoices, update payment method, cancel.",
-    status: "Coming with launch",
-  },
-  {
-    title: "Audit Log",
-    description: "Chronological record of every settings change for board-defense compliance. Required by the CEO traceability requirement.",
-    status: "Coming in Phase 4",
+    status: "Coming soon",
   },
 ];
 

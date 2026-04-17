@@ -115,7 +115,6 @@ export default function BusinessCaseClient({
   const [inputs, setInputs] = useState<BusinessCaseInputs>(() =>
     defaultInputsForTier(marketTier)
   );
-  const [acquisitionMultiple, setAcquisitionMultiple] = useState<number>(2.5);
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
   const [saveNotes, setSaveNotes] = useState("");
@@ -131,14 +130,11 @@ export default function BusinessCaseClient({
 
   const acquisition = useMemo<AcquisitionOutput>(
     () =>
-      computeAcquisitionEntry(
-        {
-          targets: acquisitionTargets,
-          organicCapitalPerUnit: organic.blendedCapitalPerUnit,
-        },
-        { multipleOverride: acquisitionMultiple }
-      ),
-    [acquisitionTargets, organic.blendedCapitalPerUnit, acquisitionMultiple]
+      computeAcquisitionEntry({
+        targets: acquisitionTargets,
+        organicCapitalPerUnit: organic.blendedCapitalPerUnit,
+      }),
+    [acquisitionTargets, organic.blendedCapitalPerUnit]
   );
 
   const rec = useMemo(
@@ -170,7 +166,6 @@ export default function BusinessCaseClient({
 
   function resetToDefaults() {
     setInputs(defaultInputsForTier(marketTier));
-    setAcquisitionMultiple(2.5);
   }
 
   function openSaveDialog() {
@@ -332,10 +327,8 @@ export default function BusinessCaseClient({
         {/* Left column — sliders */}
         <ControlsPanel
           inputs={inputs}
-          acquisitionMultiple={acquisitionMultiple}
           onField={setField}
           onMix={setMix}
-          onMultiple={setAcquisitionMultiple}
           onReset={resetToDefaults}
         />
 
@@ -389,20 +382,16 @@ export default function BusinessCaseClient({
 
 function ControlsPanel({
   inputs,
-  acquisitionMultiple,
   onField,
   onMix,
-  onMultiple,
   onReset,
 }: {
   inputs: BusinessCaseInputs;
-  acquisitionMultiple: number;
   onField: <K extends keyof BusinessCaseInputs>(
     key: K,
     value: BusinessCaseInputs[K]
   ) => void;
   onMix: (f: number, r: number, o: number) => void;
-  onMultiple: (m: number) => void;
   onReset: () => void;
 }) {
   const mixSum =
@@ -512,23 +501,6 @@ function ControlsPanel({
         </div>
       </div>
 
-      {/* Acquisition multiple */}
-      <div className="mt-5 pt-5 border-t border-gray-100">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-3">
-          Acquisition
-        </p>
-        <SliderField
-          label="Multiple"
-          value={acquisitionMultiple}
-          min={1.5}
-          max={4.0}
-          step={0.1}
-          unit="×"
-          decimals={1}
-          hint="Premium over organic cost"
-          onChange={onMultiple}
-        />
-      </div>
     </div>
   );
 }
