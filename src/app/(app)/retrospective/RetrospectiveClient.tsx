@@ -75,15 +75,6 @@ const NARRATIVES: Record<string, { headline: string; thesis: string; signal: str
   },
 };
 
-const FILTER_LABELS = [
-  "Migration",
-  "Diversity",
-  "Imbalance",
-  "Competition",
-  "Affordability",
-  "Operational",
-];
-
 function formatCurrency(value: number): string {
   return "$" + Math.round(value).toLocaleString();
 }
