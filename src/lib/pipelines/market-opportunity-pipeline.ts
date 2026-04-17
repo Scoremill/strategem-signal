@@ -338,7 +338,23 @@ function parseSectorCsv(text: string): Record<string, number> | null {
   const disclosureIdx = headers.indexOf("disclosure_code");
   if (ownCodeIdx === -1 || industryCodeIdx === -1 || agglvlIdx === -1) return null;
 
-  // First pass: collect all sectors and their employment (including suppressed)
+  // First pass: find total private employment (own=5, industry=10,
+  // agglvl=41) so we can distribute the residual to suppressed sectors.
+  let totalPrivateEmp = 0;
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const values = parseCsvLine(lines[i]);
+    if (values[ownCodeIdx] !== "5") continue;
+    if (values[industryCodeIdx] !== "10") continue;
+    if (values[agglvlIdx] !== "41") continue;
+    const m1 = parseInt(values[m1Idx] || "0") || 0;
+    const m2 = parseInt(values[m2Idx] || "0") || 0;
+    const m3 = parseInt(values[m3Idx] || "0") || 0;
+    totalPrivateEmp = Math.round((m1 + m2 + m3) / 3);
+    break;
+  }
+
+  // Second pass: collect sectors, tracking which are disclosure-suppressed
   const breakdown: Record<string, number> = {};
   const suppressedSectors: string[] = [];
   let totalKnown = 0;
@@ -365,14 +381,17 @@ function parseSectorCsv(text: string): Record<string, number> | null {
     }
   }
 
-  // For suppressed sectors: estimate employment as 1/3 of the average
-  // known sector. BLS suppresses smaller sectors more aggressively, so
-  // a full-average estimate overstates their share and inflates
-  // diversity. The 1/3 factor is conservative — it acknowledges the
-  // sector exists without pretending it's as large as the disclosed ones.
-  if (suppressedSectors.length > 0 && totalKnown > 0) {
-    const knownCount = Object.keys(breakdown).length;
-    const estimate = knownCount > 0 ? Math.round(totalKnown / knownCount / 3) : 1000;
+  // Distribute the residual (total private minus known sectors) evenly
+  // across suppressed sectors. This uses real total employment as the
+  // anchor, not a guess — the residual IS the suppressed employment.
+  if (suppressedSectors.length > 0 && totalPrivateEmp > totalKnown) {
+    const residual = totalPrivateEmp - totalKnown;
+    const perSector = Math.round(residual / suppressedSectors.length);
+    for (const ic of suppressedSectors) {
+      breakdown[ic] = Math.max(perSector, 100);
+    }
+  } else if (suppressedSectors.length > 0 && totalKnown > 0) {
+    const estimate = Math.round(totalKnown / Object.keys(breakdown).length / 3);
     for (const ic of suppressedSectors) {
       breakdown[ic] = Math.max(estimate, 100);
     }
