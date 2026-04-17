@@ -44,7 +44,7 @@ async function fetchPermitsBps(
   let inserted = 0;
 
   const now = new Date();
-  const monthsBack = backfill ? 24 : 3;
+  const monthsBack = backfill ? 24 : 2;
   const cbsaToGeoId = new Map(markets.map((m) => [m.cbsaFips, m.id]));
 
   for (let i = 0; i < monthsBack; i++) {
@@ -440,53 +440,26 @@ async function runDemandPipelineInternal(
     `[demand] Starting for ${markets.length} markets, backfill=${backfill}`
   );
 
-  // Split markets: FRED path (have series IDs) vs direct API path
-  const fredMarkets = markets.filter((m) => MSA_SERIES[m.cbsaFips] || MSA_DEMAND_COUNTY_FALLBACK[m.cbsaFips]);
-  const directMarkets = markets.filter((m) => !MSA_SERIES[m.cbsaFips] && !MSA_DEMAND_COUNTY_FALLBACK[m.cbsaFips]);
+  // ── Census BPS — permits for ALL markets (one XLS per month) ──
+  const allMarketsForBps = markets.map((m) => ({ id: m.id, cbsaFips: m.cbsaFips }));
+  const bpsResult = await fetchPermitsBps(allMarketsForBps, backfill);
+  result.permitsInserted += bpsResult.inserted;
+  result.errors.push(...bpsResult.errors);
 
-  console.log(`[demand] FRED path: ${fredMarkets.length} markets, Direct API path: ${directMarkets.length} markets`);
+  // ── BLS CES + LAUS — employment + unemployment for ALL markets ──
+  const blsResult = await fetchEmploymentBls(
+    markets.map((m) => ({ id: m.id, cbsaFips: m.cbsaFips, state: m.state })),
+    backfill
+  );
+  result.employmentInserted += blsResult.inserted;
+  result.errors.push(...blsResult.errors);
 
-  // ── Direct API path (bulk operations) ──
-
-  if (directMarkets.length > 0) {
-    // Census BPS — permits for all markets in one pass per month
-    const allMarketsForBps = markets.map((m) => ({ id: m.id, cbsaFips: m.cbsaFips }));
-    const bpsResult = await fetchPermitsBps(allMarketsForBps, backfill);
-    result.permitsInserted += bpsResult.inserted;
-    result.errors.push(...bpsResult.errors);
-
-    // BLS CES + LAUS — employment + unemployment
-    const blsResult = await fetchEmploymentBls(
-      directMarkets.map((m) => ({ id: m.id, cbsaFips: m.cbsaFips, state: m.state })),
-      backfill
-    );
-    result.employmentInserted += blsResult.inserted;
-    result.errors.push(...blsResult.errors);
-
-    // Census PEP — population
-    const pepResult = await fetchPopulationPep(
-      directMarkets.map((m) => ({ id: m.id, cbsaFips: m.cbsaFips }))
-    );
-    result.populationInserted += pepResult.inserted;
-    result.errors.push(...pepResult.errors);
-  }
-
-  // ── FRED path (per-market, legacy) ──
-
-  for (const market of fredMarkets) {
-    await new Promise((r) => setTimeout(r, 500));
-
-    const [permits, employment, population] = await Promise.all([
-      fetchPermitsFred(market.id, market.cbsaFips, startDate),
-      fetchEmploymentFred(market.id, market.cbsaFips, startDate),
-      fetchPopulationFred(market.id, market.cbsaFips, startDate),
-    ]);
-
-    result.permitsInserted += permits.inserted;
-    result.employmentInserted += employment.inserted;
-    result.populationInserted += population.inserted;
-    result.errors.push(...permits.errors, ...employment.errors, ...population.errors);
-  }
+  // ── Census PEP — population for ALL markets ──
+  const pepResult = await fetchPopulationPep(
+    markets.map((m) => ({ id: m.id, cbsaFips: m.cbsaFips }))
+  );
+  result.populationInserted += pepResult.inserted;
+  result.errors.push(...pepResult.errors);
 
   console.log(
     `[demand] Done: ${result.permitsInserted} permits, ${result.employmentInserted} employment, ${result.populationInserted} population, ${result.errors.length} errors`
