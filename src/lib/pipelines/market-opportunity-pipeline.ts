@@ -337,7 +337,12 @@ function parseSectorCsv(text: string): Record<string, number> | null {
   const m3Idx = headers.indexOf("month3_emplvl");
   const disclosureIdx = headers.indexOf("disclosure_code");
   if (ownCodeIdx === -1 || industryCodeIdx === -1 || agglvlIdx === -1) return null;
+
+  // First pass: collect all sectors and their employment (including suppressed)
   const breakdown: Record<string, number> = {};
+  const suppressedSectors: string[] = [];
+  let totalKnown = 0;
+
   for (let i = 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
     const values = parseCsvLine(lines[i]);
@@ -345,14 +350,32 @@ function parseSectorCsv(text: string): Record<string, number> | null {
     if (values[agglvlIdx] !== "44") continue;
     const ic = values[industryCodeIdx];
     if (!SECTOR_NAICS_CODES.has(ic)) continue;
-    if (disclosureIdx !== -1 && values[disclosureIdx] === "N") continue;
+
+    const isSuppressed = disclosureIdx !== -1 && values[disclosureIdx] === "N";
     const m1 = parseInt(values[m1Idx] || "0") || 0;
     const m2 = parseInt(values[m2Idx] || "0") || 0;
     const m3 = parseInt(values[m3Idx] || "0") || 0;
     const avgEmp = Math.round((m1 + m2 + m3) / 3);
-    if (avgEmp <= 0) continue;
-    breakdown[ic] = avgEmp;
+
+    if (isSuppressed || avgEmp <= 0) {
+      suppressedSectors.push(ic);
+    } else {
+      breakdown[ic] = avgEmp;
+      totalKnown += avgEmp;
+    }
   }
+
+  // For suppressed sectors: estimate employment as the average of known
+  // sectors. This preserves sector count for HHI diversity calculation
+  // while acknowledging the employment figure is approximate.
+  if (suppressedSectors.length > 0 && totalKnown > 0) {
+    const knownCount = Object.keys(breakdown).length;
+    const avgPerSector = knownCount > 0 ? Math.round(totalKnown / knownCount) : 1000;
+    for (const ic of suppressedSectors) {
+      breakdown[ic] = avgPerSector;
+    }
+  }
+
   return Object.keys(breakdown).length > 0 ? breakdown : null;
 }
 
