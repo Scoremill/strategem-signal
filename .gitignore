@@ -44,3 +44,5 @@ next-env.d.ts
 scripts/discover-fred-series.ts
 scripts/fred-series-discovered.json
 scripts/fred-series-snippet.ts
+
+CLAUDE.md
