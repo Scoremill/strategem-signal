@@ -322,7 +322,7 @@ async function fetchSectorBreakdown(
 /**
  * Parse the BLS QCEW CSV and return a 2-digit NAICS sector breakdown.
  * Filters to private ownership (own_code=5) at MSA × 2-digit sector
- * granularity (agglvl_code=42). See the comment inside the body for
+ * granularity (agglvl_code=44). See the comment inside the body for
  * why we use own_code=5 rather than the unavailable own_code=0 rollup.
  */
 function parseSectorCsv(text: string): Record<string, number> | null {
@@ -342,7 +342,7 @@ function parseSectorCsv(text: string): Record<string, number> | null {
     if (!lines[i].trim()) continue;
     const values = parseCsvLine(lines[i]);
     if (values[ownCodeIdx] !== "5") continue;
-    if (values[agglvlIdx] !== "42") continue;
+    if (values[agglvlIdx] !== "44") continue;
     const ic = values[industryCodeIdx];
     if (!SECTOR_NAICS_CODES.has(ic)) continue;
     if (disclosureIdx !== -1 && values[disclosureIdx] === "N") continue;
