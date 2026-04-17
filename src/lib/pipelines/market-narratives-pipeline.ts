@@ -14,7 +14,7 @@ import {
   opsBuilderMarkets,
   marketNarratives,
 } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import OpenAI from "openai";
 import {
@@ -93,6 +93,25 @@ export async function runMarketNarrativesPipeline(): Promise<MarketNarrativesRes
       toYmd(healthRow?.snapshotDate) ??
       toYmd(oppRow?.snapshotDate) ??
       new Date().toISOString().slice(0, 10);
+
+    // Skip if we already have a narrative for this exact snapshot_date.
+    // Makes the pipeline idempotent + self-resuming: a 504-timed-out run
+    // can be re-dispatched and picks up from where it left off instead
+    // of re-burning OpenAI spend on markets already done.
+    const [existing] = await db
+      .select({ id: marketNarratives.id })
+      .from(marketNarratives)
+      .where(
+        and(
+          eq(marketNarratives.geographyId, g.id),
+          eq(marketNarratives.snapshotDate, snapshotDate)
+        )
+      )
+      .limit(1);
+    if (existing) {
+      result.marketsSkipped++;
+      continue;
+    }
 
     const builderRows = await db
       .select({ ticker: opsBuilderMarkets.builderTicker })
