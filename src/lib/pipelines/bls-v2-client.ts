@@ -129,16 +129,15 @@ export function cesSeriesId(stateFips: string, cbsaFips: string): string {
 /**
  * Build a LAUS series ID for unemployment rate at MSA level.
  *
- * Format: LAUST{areaCode}00000000{measureCode}
- *   - LAUST = Local Area Unemployment Statistics, Type
- *   - areaCode = CBSA FIPS padded to 15 chars with trailing zeros
- *   - measureCode = 03 (unemployment rate)
- *
- * BLS LAUS MSA area codes use the CBSA FIPS with specific padding.
+ * Format: LAUMT{stateFips}{areaCode}0000000{measureCode}
+ *   - LAUMT = Local Area Unemployment, Metro Type
+ *   - stateFips = 2-digit state FIPS
+ *   - areaCode = first 4 digits of CBSA FIPS (same as QCEW area)
+ *   - 0000000 = 7-zero padding
+ *   - measureCode = 03 (unemployment rate, 2 digits)
  */
-export function lausSeriesId(cbsaFips: string): string {
-  const area = cbsaFips.padEnd(15, "0");
-  return `LAUST${area}03`;
+export function lausSeriesId(stateFips: string, cbsaFips: string): string {
+  return `LAUMT${stateFips}${cbsaFips.slice(0, 4)}000000003`;
 }
 
 // ─── State FIPS lookup ──────────────────────────────────────────

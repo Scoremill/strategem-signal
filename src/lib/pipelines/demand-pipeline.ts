@@ -117,7 +117,7 @@ async function fetchEmploymentBls(
     });
 
     lausSeries.push({
-      seriesId: lausSeriesId(m.cbsaFips),
+      seriesId: lausSeriesId(stateFips, m.cbsaFips),
       geoId: m.id,
       cbsa: m.cbsaFips,
     });
