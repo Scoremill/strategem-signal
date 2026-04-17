@@ -523,6 +523,8 @@ export async function runMarketOpportunityPipeline(): Promise<PipelineResult> {
   for (const market of markets) {
     result.marketsProcessed++;
     try {
+      // Throttle BLS sector fetches — BLS truncates responses under rapid-fire requests
+      await new Promise((r) => setTimeout(r, 300));
       const inputs = await loadInputsForMarket(market.id, market.cbsaFips, qtr);
       const scored = computeMarketOpportunity(inputs);
 
