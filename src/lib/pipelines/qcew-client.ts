@@ -409,6 +409,25 @@ export function getLatestQcewQuarter(): { year: number; quarter: number } {
 }
 
 /**
+ * Probe BLS to find the most recent quarter that actually has published
+ * data. Starts from the heuristic quarter and steps backward up to 4
+ * quarters until it gets a 200 response with real data.
+ */
+export async function resolveAvailableQcewQuarter(): Promise<{ year: number; quarter: number }> {
+  let { year: y, quarter: q } = getLatestQcewQuarter();
+  for (let i = 0; i < 4; i++) {
+    const url = `${BASE_URL}/${y}/${q}/area/C1910.csv`;
+    try {
+      const res = await fetch(url);
+      if (res.ok) return { year: y, quarter: q };
+    } catch { /* fall through */ }
+    q--;
+    if (q < 1) { q = 4; y--; }
+  }
+  return getLatestQcewQuarter();
+}
+
+/**
  * Get quarters for backfill (last 8 quarters = 2 years).
  */
 export function getBackfillQuarters(): Array<{ year: number; quarter: number }> {

@@ -4,7 +4,7 @@
  */
 import { db } from "@/lib/db";
 import { geographies, tradeCapacityData, permitData } from "@/lib/db/schema";
-import { fetchQcewTrades, getLatestQcewQuarter, getBackfillQuarters } from "./qcew-client";
+import { fetchQcewTrades, getLatestQcewQuarter, getBackfillQuarters, resolveAvailableQcewQuarter } from "./qcew-client";
 import { eq, sql, and, desc, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -49,7 +49,9 @@ async function runCapacityPipelineInternal(
     ? await db.select().from(geographies).where(and(eq(geographies.isActive, true), inArray(geographies.cbsaFips, cbsaFilter)))
     : await db.select().from(geographies).where(eq(geographies.isActive, true));
 
-  const quarters = backfill ? getBackfillQuarters() : [getLatestQcewQuarter()];
+  const quarters = backfill
+    ? getBackfillQuarters()
+    : [await resolveAvailableQcewQuarter()];
 
   const result: CapacityPipelineResult = {
     recordsInserted: 0,
