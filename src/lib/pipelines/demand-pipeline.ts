@@ -17,7 +17,7 @@ import { geographies, permitData, employmentData, migrationData } from "@/lib/db
 import { fetchSeries, fetchAggregatedCountyPermits, MSA_SERIES, MSA_DEMAND_COUNTY_FALLBACK } from "./fred-client";
 import { fetchBpsMonth } from "./census-bps-client";
 import { fetchBlsSeries, cesSeriesId, lausSeriesId, stateAbbrToFips } from "./bls-v2-client";
-import { fetchMsaPopulationMultiYear } from "./census-pep-client";
+import { fetchPepVintage } from "./census-pep-client";
 import { eq, and, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -211,32 +211,33 @@ async function fetchPopulationPep(
   let inserted = 0;
 
   const currentYear = new Date().getFullYear();
-  // PEP has ~18 month lag; try the last 3 vintage years
-  const years = [currentYear - 2, currentYear - 1, currentYear - 3];
+  // PEP vintage = latest year in the file. Try current-2 first (most likely published).
+  const vintage = currentYear - 2;
 
   const cbsaToGeoId = new Map(markets.map((m) => [m.cbsaFips, m.id]));
+  // Cleveland CBSA override: our DB has 17460, Census uses 17410
+  cbsaToGeoId.set("17410", cbsaToGeoId.get("17460") ?? "");
 
   try {
-    console.log(`[demand] Fetching Census PEP population for vintages ${years.join(", ")}...`);
-    const multiYear = await fetchMsaPopulationMultiYear(years);
+    console.log(`[demand] Fetching Census PEP vintage ${vintage}...`);
+    const rows = await fetchPepVintage(vintage);
 
-    for (const [cbsa, rows] of multiYear) {
-      const geoId = cbsaToGeoId.get(cbsa);
+    for (const row of rows) {
+      const geoId = cbsaToGeoId.get(row.cbsaFips);
       if (!geoId) continue;
 
-      for (const row of rows) {
-        await db
-          .insert(migrationData)
-          .values({
-            id: randomUUID(),
-            geographyId: geoId,
-            year: row.year,
-            totalPopulation: row.population,
-            source: "census_pep",
-          })
-          .onConflictDoNothing();
-        inserted++;
-      }
+      await db
+        .insert(migrationData)
+        .values({
+          id: randomUUID(),
+          geographyId: geoId,
+          year: row.year,
+          totalPopulation: row.population,
+          netDomesticMigration: row.netDomesticMigration,
+          source: "census_pep",
+        })
+        .onConflictDoNothing();
+      inserted++;
     }
   } catch (err) {
     errors.push(`census-pep: ${err instanceof Error ? err.message : String(err)}`);
