@@ -65,11 +65,9 @@ export default async function DataHealthPage() {
         ORDER BY mos.snapshot_date DESC LIMIT 1) AS opp_f6,
 
       -- Quality: sector breakdown depth (how many NAICS codes in diversity input)
-      (SELECT jsonb_array_length(
-        COALESCE(
-          (SELECT jsonb_agg(k) FROM jsonb_object_keys(mos.inputs_json->'sectorEmployment'->'breakdown') k),
-          '[]'::jsonb
-        )
+      (SELECT COALESCE(
+        (SELECT COUNT(*) FROM jsonb_object_keys(mos.inputs_json->'sectorEmployment'->'breakdown')),
+        0
       ) FROM market_opportunity_scores mos
         WHERE mos.geography_id = g.id
         ORDER BY mos.snapshot_date DESC LIMIT 1) AS sector_count,
