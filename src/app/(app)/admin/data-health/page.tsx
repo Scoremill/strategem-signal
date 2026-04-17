@@ -1,7 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { geographies } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import DataHealthClient, { type MarketCoverage } from "./DataHealthClient";
 
@@ -20,6 +19,8 @@ export default async function DataHealthPage() {
       g.short_name,
       g.state,
       g.cbsa_fips,
+
+      -- Row counts (existence)
       (SELECT COUNT(*) FROM permit_data pd WHERE pd.geography_id = g.id) AS permits,
       (SELECT COUNT(*) FROM employment_data ed WHERE ed.geography_id = g.id) AS employment,
       (SELECT COUNT(*) FROM employment_data ed WHERE ed.geography_id = g.id AND ed.unemployment_rate IS NOT NULL) AS unemployment,
@@ -28,6 +29,8 @@ export default async function DataHealthPage() {
       (SELECT COUNT(*) FROM trade_capacity_data td WHERE td.geography_id = g.id) AS qcew,
       (SELECT COUNT(*) FROM zillow_zhvi z WHERE z.geography_id = g.id) AS zhvi,
       (SELECT COUNT(*) FROM fhfa_hpi h WHERE h.geography_id = g.id) AS fhfa,
+
+      -- Latest scores
       (SELECT composite_score FROM portfolio_health_snapshots phs
         WHERE phs.geography_id = g.id
         ORDER BY phs.snapshot_date DESC LIMIT 1) AS latest_composite,
@@ -39,7 +42,44 @@ export default async function DataHealthPage() {
         ORDER BY phs.snapshot_date DESC LIMIT 1) AS latest_financial,
       (SELECT operational_score FROM portfolio_health_snapshots phs
         WHERE phs.geography_id = g.id
-        ORDER BY phs.snapshot_date DESC LIMIT 1) AS latest_operational
+        ORDER BY phs.snapshot_date DESC LIMIT 1) AS latest_operational,
+
+      -- Quality: opportunity filter scores (for anomaly detection)
+      (SELECT filter_1_migration FROM market_opportunity_scores mos
+        WHERE mos.geography_id = g.id
+        ORDER BY mos.snapshot_date DESC LIMIT 1) AS opp_f1,
+      (SELECT filter_2_diversity FROM market_opportunity_scores mos
+        WHERE mos.geography_id = g.id
+        ORDER BY mos.snapshot_date DESC LIMIT 1) AS opp_f2,
+      (SELECT filter_3_imbalance FROM market_opportunity_scores mos
+        WHERE mos.geography_id = g.id
+        ORDER BY mos.snapshot_date DESC LIMIT 1) AS opp_f3,
+      (SELECT filter_4_competitive FROM market_opportunity_scores mos
+        WHERE mos.geography_id = g.id
+        ORDER BY mos.snapshot_date DESC LIMIT 1) AS opp_f4,
+      (SELECT filter_5_affordability FROM market_opportunity_scores mos
+        WHERE mos.geography_id = g.id
+        ORDER BY mos.snapshot_date DESC LIMIT 1) AS opp_f5,
+      (SELECT filter_6_operational FROM market_opportunity_scores mos
+        WHERE mos.geography_id = g.id
+        ORDER BY mos.snapshot_date DESC LIMIT 1) AS opp_f6,
+
+      -- Quality: sector breakdown depth (how many NAICS codes in diversity input)
+      (SELECT jsonb_array_length(
+        COALESCE(
+          (SELECT jsonb_agg(k) FROM jsonb_object_keys(mos.inputs_json->'sectorEmployment'->'breakdown') k),
+          '[]'::jsonb
+        )
+      ) FROM market_opportunity_scores mos
+        WHERE mos.geography_id = g.id
+        ORDER BY mos.snapshot_date DESC LIMIT 1) AS sector_count,
+
+      -- Quality: permit history depth (need 12+ for YoY)
+      (SELECT COUNT(DISTINCT pd.period_date) FROM permit_data pd WHERE pd.geography_id = g.id) AS permit_months,
+
+      -- Quality: employment history depth
+      (SELECT COUNT(DISTINCT ed.period_date) FROM employment_data ed WHERE ed.geography_id = g.id) AS employment_months
+
     FROM geographies g
     WHERE g.is_active = true
     ORDER BY g.short_name
@@ -62,22 +102,16 @@ export default async function DataHealthPage() {
     demand: r.latest_demand ? parseFloat(r.latest_demand) : null,
     financial: r.latest_financial ? parseFloat(r.latest_financial) : null,
     operational: r.latest_operational ? parseFloat(r.latest_operational) : null,
+    oppF1: r.opp_f1 ? parseFloat(r.opp_f1) : null,
+    oppF2: r.opp_f2 ? parseFloat(r.opp_f2) : null,
+    oppF3: r.opp_f3 ? parseFloat(r.opp_f3) : null,
+    oppF4: r.opp_f4 ? parseFloat(r.opp_f4) : null,
+    oppF5: r.opp_f5 ? parseFloat(r.opp_f5) : null,
+    oppF6: r.opp_f6 ? parseFloat(r.opp_f6) : null,
+    sectorCount: Number(r.sector_count ?? 0),
+    permitMonths: Number(r.permit_months ?? 0),
+    employmentMonths: Number(r.employment_months ?? 0),
   }));
-
-  const summary = {
-    total: markets.length,
-    permits: markets.filter((m) => m.permits > 0).length,
-    employment: markets.filter((m) => m.employment > 0).length,
-    unemployment: markets.filter((m) => m.unemployment > 0).length,
-    migration: markets.filter((m) => m.migration > 0).length,
-    income: markets.filter((m) => m.income > 0).length,
-    qcew: markets.filter((m) => m.qcew > 0).length,
-    zhvi: markets.filter((m) => m.zhvi > 0).length,
-    fhfa: markets.filter((m) => m.fhfa > 0).length,
-    allThreeScores: markets.filter(
-      (m) => m.demand != null && m.financial != null && m.operational != null
-    ).length,
-  };
 
   return (
     <div className="h-full flex flex-col">
@@ -86,12 +120,12 @@ export default async function DataHealthPage() {
           Data Health Audit
         </h1>
         <p className="text-xs text-[#6B7280] mt-0.5">
-          Coverage matrix for every active market — which data sources
-          are populated and which have gaps
+          Data coverage AND quality for every market — flags gaps,
+          anomalous scores, and thin data behind computed numbers
         </p>
       </header>
       <main className="flex-1 overflow-y-auto">
-        <DataHealthClient markets={markets} summary={summary} />
+        <DataHealthClient markets={markets} />
       </main>
     </div>
   );
