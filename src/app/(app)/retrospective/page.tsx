@@ -134,8 +134,8 @@ export default async function RetrospectivePage() {
           Retrospective Analysis
         </h1>
         <p className="text-xs text-[#6B7280] mt-0.5">
-          How StrategemSignal would have flagged these markets 6-12 months
-          before consensus
+          How StrategemSignal would have flagged these markets 12-18 months
+          ago
         </p>
       </header>
       <main className="flex-1 overflow-y-auto">
