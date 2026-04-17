@@ -167,9 +167,11 @@ function scoreMigration(inputs: MarketOpportunityInputs): FilterScore {
  * even if the current numbers look great (see: Silicon Valley ~2001,
  * oil towns ~2015). The scorer inverts HHI onto a 0-100 scale.
  *
- * Real-world metro HHIs typically land between 800 (very diverse, like
- * NYC) and 3000 (heavily concentrated, like small single-industry
- * towns). Normalized inverse on [800, 3000].
+ * Real-world metro HHIs with full 15-20 sector coverage range from
+ * ~400 (very diverse — DFW, NYC, Atlanta) to ~2000 (heavily
+ * concentrated — small single-industry towns). Normalized inverse
+ * on [400, 2000]. The floor was recalibrated from 800 after fixing
+ * the BLS disclosure-suppression parser to include all sectors.
  */
 function scoreDiversity(inputs: MarketOpportunityInputs): FilterScore {
   const breakdown = inputs.sectorEmployment.breakdown;
@@ -184,7 +186,7 @@ function scoreDiversity(inputs: MarketOpportunityInputs): FilterScore {
     const share = (v / total) * 100;
     hhi += share * share;
   }
-  return pack(normalizeInverse(hhi, 800, 3000));
+  return pack(normalizeInverse(hhi, 400, 2000));
 }
 
 // ─── Filter 3 — Supply-Demand Imbalance ─────────────────────────
