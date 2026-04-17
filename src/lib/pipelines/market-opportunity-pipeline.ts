@@ -365,14 +365,16 @@ function parseSectorCsv(text: string): Record<string, number> | null {
     }
   }
 
-  // For suppressed sectors: estimate employment as the average of known
-  // sectors. This preserves sector count for HHI diversity calculation
-  // while acknowledging the employment figure is approximate.
+  // For suppressed sectors: estimate employment as 1/3 of the average
+  // known sector. BLS suppresses smaller sectors more aggressively, so
+  // a full-average estimate overstates their share and inflates
+  // diversity. The 1/3 factor is conservative — it acknowledges the
+  // sector exists without pretending it's as large as the disclosed ones.
   if (suppressedSectors.length > 0 && totalKnown > 0) {
     const knownCount = Object.keys(breakdown).length;
-    const avgPerSector = knownCount > 0 ? Math.round(totalKnown / knownCount) : 1000;
+    const estimate = knownCount > 0 ? Math.round(totalKnown / knownCount / 3) : 1000;
     for (const ic of suppressedSectors) {
-      breakdown[ic] = avgPerSector;
+      breakdown[ic] = Math.max(estimate, 100);
     }
   }
 
