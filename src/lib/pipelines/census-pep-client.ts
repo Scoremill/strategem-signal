@@ -1,124 +1,135 @@
 /**
  * Census Population Estimates Program (PEP) client.
  *
- * Fetches annual population estimates by CBSA/MSA.
- * No API key required (but rate-limited without one).
+ * Downloads the annual MSA-level population estimates CSV directly
+ * from Census Bureau servers. This is the upstream source that FRED
+ * re-hosts — we cut out the middleman for full MSA coverage.
  *
- * Data lag: ~18 months. 2023 estimates released May 2024.
- * Vintage = the base year of the estimate series.
+ * Source: https://www2.census.gov/programs-surveys/popest/datasets/
+ * Format: One CSV per vintage covering all ~380 CBSAs with 5 years
+ *   of annual population, births, deaths, and migration components.
+ * Frequency: Annual. New vintage published December-March.
+ * Coverage: All Metropolitan and Micropolitan Statistical Areas.
  */
 
-const BASE_URL = "https://api.census.gov/data";
+const PEP_BASE = "https://www2.census.gov/programs-surveys/popest/datasets";
 
-export interface PepPopulationRow {
+export interface PepRow {
   cbsaFips: string;
   name: string;
-  population: number;
   year: number;
+  population: number;
+  netDomesticMigration: number;
+  netInternationalMigration: number;
 }
 
 /**
- * Fetch population for all MSAs for a given vintage year.
- * Returns a map of CBSA FIPS → population record.
- *
- * Census PEP publishes multiple years per vintage. We fetch the
- * most recent year available in the vintage.
+ * Download and parse the Census PEP metro totals CSV for a given
+ * vintage (e.g., 2024 = the 2020-2024 estimates file). Returns
+ * rows for all CBSAs across all years in the vintage.
  */
-export async function fetchMsaPopulation(
-  vintage: number
-): Promise<Map<string, PepPopulationRow>> {
-  const popVar = `POP_${vintage}`;
-  const url = `${BASE_URL}/${vintage}/pep/population?get=NAME,${popVar}&for=metropolitan%20statistical%20area/micropolitan%20statistical%20area:*`;
+export async function fetchPepVintage(vintage: number): Promise<PepRow[]> {
+  const startDecade = Math.floor(vintage / 10) * 10;
+  const url = `${PEP_BASE}/${startDecade}-${vintage}/metro/totals/cbsa-est${vintage}-alldata.csv`;
 
   const res = await fetch(url);
   if (!res.ok) {
-    if (res.status === 404) {
-      // Vintage not available yet — try without the year suffix
-      return fetchMsaPopulationFallback(vintage);
+    if (res.status === 404) return [];
+    throw new Error(`Census PEP ${vintage} HTTP ${res.status}`);
+  }
+
+  const text = await res.text();
+  const lines = text.split("\n");
+  if (lines.length < 2) return [];
+
+  const headers = lines[0].split(",").map((h) => h.trim());
+
+  // Find column indices for the fields we need
+  const cbsaIdx = headers.indexOf("CBSA");
+  const nameIdx = headers.indexOf("NAME");
+  const lsadIdx = headers.indexOf("LSAD");
+  const stcouIdx = headers.indexOf("STCOU");
+
+  if (cbsaIdx === -1 || nameIdx === -1) {
+    throw new Error(`Census PEP ${vintage}: missing CBSA or NAME column`);
+  }
+
+  // Build year column indices dynamically
+  const yearCols: Array<{
+    year: number;
+    popIdx: number;
+    domMigIdx: number;
+    intMigIdx: number;
+  }> = [];
+
+  for (let y = startDecade; y <= vintage; y++) {
+    const popIdx = headers.indexOf(`POPESTIMATE${y}`);
+    const domMigIdx = headers.indexOf(`DOMESTICMIG${y}`);
+    const intMigIdx = headers.indexOf(`INTERNATIONALMIG${y}`);
+    if (popIdx !== -1) {
+      yearCols.push({ year: y, popIdx, domMigIdx, intMigIdx });
     }
-    throw new Error(`Census PEP API error ${res.status}: ${await res.text()}`);
   }
 
-  const rows: string[][] = await res.json();
-  const result = new Map<string, PepPopulationRow>();
+  const rows: PepRow[] = [];
 
-  // First row is headers
-  for (let i = 1; i < rows.length; i++) {
-    const [name, pop, cbsa] = rows[i];
-    if (!cbsa || !pop) continue;
-    const population = parseInt(pop, 10);
-    if (!Number.isFinite(population) || population <= 0) continue;
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
 
-    result.set(cbsa, {
-      cbsaFips: cbsa,
-      name: name.replace(/ Metro(politan)? Statistical Area/i, ""),
-      population,
-      year: vintage,
-    });
-  }
+    const values = parseCsvLine(line);
 
-  return result;
-}
+    // Only include CBSA-level rows (not county subdivisions).
+    // CBSA-level rows have an empty STCOU field.
+    if (stcouIdx !== -1 && values[stcouIdx]?.trim()) continue;
 
-/**
- * Fallback for vintages where POP_{YEAR} variable doesn't exist.
- * Census sometimes uses different variable names across vintages.
- */
-async function fetchMsaPopulationFallback(
-  vintage: number
-): Promise<Map<string, PepPopulationRow>> {
-  // Try POPESTIMATE variable (used in some PEP vintages)
-  const url = `${BASE_URL}/${vintage}/pep/population?get=NAME,POPESTIMATE&for=metropolitan%20statistical%20area/micropolitan%20statistical%20area:*`;
+    // Only include Metropolitan Statistical Areas
+    if (lsadIdx !== -1 && !values[lsadIdx]?.includes("Metropolitan")) continue;
 
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return new Map();
+    const cbsa = values[cbsaIdx]?.trim();
+    const name = values[nameIdx]?.trim().replace(/"/g, "");
+    if (!cbsa || !/^\d{5}$/.test(cbsa)) continue;
 
-    const rows: string[][] = await res.json();
-    const result = new Map<string, PepPopulationRow>();
+    for (const yc of yearCols) {
+      const pop = parseInt(values[yc.popIdx] || "0", 10);
+      if (!pop || pop <= 0) continue;
 
-    for (let i = 1; i < rows.length; i++) {
-      const [name, pop, cbsa] = rows[i];
-      if (!cbsa || !pop) continue;
-      const population = parseInt(pop, 10);
-      if (!Number.isFinite(population) || population <= 0) continue;
+      const domMig = yc.domMigIdx !== -1
+        ? parseInt(values[yc.domMigIdx] || "0", 10)
+        : 0;
+      const intMig = yc.intMigIdx !== -1
+        ? parseInt(values[yc.intMigIdx] || "0", 10)
+        : 0;
 
-      result.set(cbsa, {
+      rows.push({
         cbsaFips: cbsa,
-        name,
-        population,
-        year: vintage,
+        name: name.replace(/, (Metropolitan|Micropolitan) Statistical Area$/, ""),
+        year: yc.year,
+        population: pop,
+        netDomesticMigration: domMig,
+        netInternationalMigration: intMig,
       });
     }
-
-    return result;
-  } catch {
-    return new Map();
   }
+
+  return rows;
 }
 
-/**
- * Fetch population for multiple vintage years and return all results.
- * Useful for computing YoY population change.
- */
-export async function fetchMsaPopulationMultiYear(
-  years: number[]
-): Promise<Map<string, PepPopulationRow[]>> {
-  const result = new Map<string, PepPopulationRow[]>();
-
-  for (const year of years) {
-    await new Promise((r) => setTimeout(r, 500));
-    try {
-      const yearData = await fetchMsaPopulation(year);
-      for (const [cbsa, row] of yearData) {
-        const existing = result.get(cbsa) || [];
-        existing.push(row);
-        result.set(cbsa, existing);
-      }
-    } catch (err) {
-      console.warn(`[census-pep] Failed to fetch vintage ${year}:`, err);
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === "," && !inQuotes) {
+      result.push(current);
+      current = "";
+    } else {
+      current += ch;
     }
   }
-
+  result.push(current);
   return result;
 }
